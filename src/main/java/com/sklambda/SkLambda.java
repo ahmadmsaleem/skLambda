@@ -41,8 +41,8 @@ public class SkLambda extends JavaPlugin implements AddonModule {
 			getLogger().severe("Could not find Skript! Make sure you have it installed and that it properly loaded. Disabling...");
 			getServer().getPluginManager().disablePlugin(this);
 			return;
-		} else if (Skript.getVersion().isSmallerThan(new Version("2.14.3"))) {
-			getLogger().severe("You are running an unsupported version of Skript. Please update to at least Skript 2.14.3. Disabling...");
+		} else if (Skript.getVersion().isSmallerThan(new Version("2.15.0"))) {
+			getLogger().severe("You are running an unsupported version of Skript. Please update to at least Skript 2.15.0. Disabling...");
 			getServer().getPluginManager().disablePlugin(this);
 			return;
 		}
