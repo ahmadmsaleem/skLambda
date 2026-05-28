@@ -19,11 +19,15 @@ import org.skriptlang.skript.registration.DefaultSyntaxInfos;
 import org.skriptlang.skript.registration.SyntaxRegistry;
 
 @Name("Listener Triggers Remaining")
-@Description("""
-		How many more times a listener will fire before completion.
-		- `remaining triggers` (no operand) only works inside an `on trigger` block.
-		- `triggers of %listener%` / `%listener%'s triggers` work anywhere.
-		Supports `add`, `set`, and `remove`.""")
+@Description({
+		"How many more times a listener will fire before completion.",
+		"",
+		"Forms:",
+		"\t`remaining triggers` (no operand) only works inside an `on trigger` block.",
+		"\t`triggers of %listener%` and `%listener%'s triggers` work anywhere.",
+		"",
+		"Supports `add`, `set`, and `remove`."
+})
 @Example("""
 		listen for chat:
 			triggers: 5
