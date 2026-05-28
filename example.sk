@@ -1,58 +1,155 @@
 # skLambda 
 
-# 1. lambda: typed args + return
-command /double <number>:
-    trigger:
-        set {_double} to lambda (n: number) -> number:
-            return {_n} * 2
-        set {_r} to call lambda {_double} with arg-1
-        send "%arg-1% * 2 = %{_r}%" to sender
+# ============================================================
+# Full showcases — 4 examples exercising the entire feature set
+# ============================================================
 
-# 2. lambda: side effect only (run)
-command /shout <player> <text>:
+# Showcase 1: parkour challenge
+# Uses: lambda, listener, where: block, countdown, triggers,
+# remaining triggers in trigger/completion/timeout, skip trigger
+command /parkour:
     trigger:
-        set {_shout} to lambda (p: player, msg: text):
-            send "<gold>[shout]</gold> %{_msg}%" to {_p}
-        run lambda {_shout} with arg-1, arg-2
-
-# 3. listen: mine 10 stone in 30s
-command /challenge:
-    trigger:
-        send "<yellow>mine 10 stone in 30s" to sender
-        listen for block break where event-block is stone:
+        set {_p} to sender
+        set {_score} to lambda (jumps: number, secs_left: number) -> number:
+            return {_jumps} * 10 + {_secs_left}
+        send "<yellow>jump on grass 8 times in 30s (other blocks don't count)" to {_p}
+        listen for player jump:
+            where:
+                event-player is {_p}
+                block under event-player is grass block
             countdown: 30 seconds
-            triggers: 10
+            triggers: 8
             on trigger:
-                send "<gray>keep going..." to event-player
+                if event-player's gamemode is creative:
+                    skip trigger
+                send "<aqua>jump %8 - remaining triggers% / 8" to {_p}
             on completion:
-                send "<green>done!" to event-player
-                give 5 diamond to event-player
+                set {_secs} to (remaining countdown) / 1 second
+                set {_pts} to call lambda {_score} with 8, {_secs}
+                send "<green>cleared! score = %{_pts}%" to {_p}
+                give 1 emerald to {_p}
             on timeout:
-                send "<red>too slow" to event-player
-        send "<gray>this should be triggered directly after the listener is registered" to player
+                send "<red>failed at %8 - remaining triggers% / 8 jumps" to {_p}
 
-# 4. listen: unregister listener
-command /nextchat:
+
+# Showcase 2: phased boss shield
+# Uses: declared listener, register, pause/resume from another listener,
+# mutate triggers + countdown from outside, is paused / is registered
+command /bossshield:
     trigger:
-        set {_player} to sender
-        send "<gray>say something..." to {_player}
-        listen for chat:
+        set {_p} to sender
+        send "<gold>boss shield armed: 6 hits / 45s. eat steak to pause it 5s for a counter-attack window." to {_p}
+        set {boss::%{_p}%} to listener for damage where victim is {_p}:
+            countdown: 45 seconds
+            triggers: 6
             on trigger:
-                send "<aqua>you said: %message%" to {_player}
-                unregister listener
+                cancel event
+                send "<blue>blocked! (%remaining triggers% hits, %remaining countdown% left)" to {_p}
+            on completion:
+                send "<red>shield broken — boss phase 2!" to {_p}
+            on timeout:
+                send "<gray>shield expired safely (%remaining triggers% hits unused)" to {_p}
+        register {boss::%{_p}%}
 
-# 5. declared listener: register / unregister from outside
-on load:
-    set {chat_log} to listener for chat:
-        on trigger:
-            send "[chat] %sender%: %message%" to console
-            cancel event
+        set {boss_window::%{_p}%} to listener for consume where event-player is {_p}:
+            on trigger:
+                if event-item is not cooked beef:
+                    skip trigger
+                if {boss::%{_p}%} is paused:
+                    skip trigger
+                if {boss::%{_p}%} is not registered:
+                    skip trigger
+                pause {boss::%{_p}%}
+                send "<yellow>counter-window open! 5s..." to {_p}
+                add 10 seconds to {boss::%{_p}%}'s countdown
+                wait 5 seconds
+                if {boss::%{_p}%} is registered:
+                    resume {boss::%{_p}%}
+                    send "<gold>shield re-engaged" to {_p}
+        register {boss_window::%{_p}%}
 
-command /chatlog <text>:
+
+command /bossend:
     trigger:
-        if arg-1 is "on":
-            register {chat_log}
-            send "<green>logging on" to sender
-        else:
-            unregister {chat_log}
-            send "<red>logging off" to sender
+        set {_p} to sender
+        if {boss::%{_p}%} is registered:
+            unregister {boss::%{_p}%}
+        if {boss_window::%{_p}%} is registered:
+            unregister {boss_window::%{_p}%}
+        send "<gray>boss systems offline" to {_p}
+
+
+# Showcase 3: scoreboard quest with higher-order lambda
+# Uses: lambda returning lambda, listener for block break with where:,
+# skip trigger to filter tools, remaining triggers in completion
+command /miner:
+    trigger:
+        set {_p} to sender
+        set {_reward_for} to lambda (base: number) -> object:
+            set {_inner} to lambda (multiplier: number) -> number:
+                return {_base} * {_multiplier}
+            return {_inner}
+        set {_iron_reward} to call lambda {_reward_for} with 5
+
+        send "<yellow>mine 12 iron ore in 60s with a pickaxe" to {_p}
+        listen for block break:
+            where:
+                event-player is {_p}
+                event-block is iron ore
+            countdown: 60 seconds
+            triggers: 12
+            on trigger:
+                if tool of event-player is not diamond pickaxe:
+                    skip trigger
+                send "<aqua>ore %12 - remaining triggers% / 12" to {_p}
+            on completion:
+                set {_amt} to call lambda {_iron_reward} with 3
+                send "<green>quest done! reward = %{_amt}% iron" to {_p}
+                give {_amt} of iron ingot to {_p}
+            on timeout:
+                send "<red>only got %12 - remaining triggers% / 12, no reward" to {_p}
+
+
+# Showcase 4: chat-driven game with pause/resume/skip
+# Uses: paused-at-start listener, resume from chat listener,
+# skip trigger for invalid input, cancel listener for early exit,
+# remaining triggers/countdown used in every callback
+command /guessgame:
+    trigger:
+        set {_p} to sender
+        set {target::%{_p}%} to random integer between 1 and 20
+        set {guess::%{_p}%} to listener for chat where player is {_p}:
+            countdown: 45 seconds
+            triggers: 5
+            on trigger:
+                cancel event
+                set {_msg} to message
+                if {_msg} parsed as integer is not set:
+                    send "<gray>not a number, doesn't count" to {_p}
+                    skip trigger
+                set {_n} to {_msg} parsed as integer
+                if {_n} is {target::%{_p}%}:
+                    send "<green>got it! %{_n}% is correct (%remaining countdown% left)" to {_p}
+                    give 1 diamond to {_p}
+                    cancel listener
+                else if {_n} < {target::%{_p}%}:
+                    send "<yellow>higher — %remaining triggers% guesses, %remaining countdown%" to {_p}
+                else:
+                    send "<yellow>lower — %remaining triggers% guesses, %remaining countdown%" to {_p}
+            on completion:
+                send "<red>out of guesses (number was %{target::%{_p}%}%)" to {_p}
+            on timeout:
+                send "<red>time's up — %remaining triggers% guesses unused (number was %{target::%{_p}%}%)" to {_p}
+        register {guess::%{_p}%}
+        pause {guess::%{_p}%}
+        send "<gray>guess 1-20. say 'start' in chat to begin." to {_p}
+
+        listen for chat where player is {_p}:
+            triggers: 1
+            on trigger:
+                if message is not "start":
+                    skip trigger
+                cancel event
+                if {guess::%{_p}%} is paused:
+                    resume {guess::%{_p}%}
+                    send "<green>go!" to {_p}

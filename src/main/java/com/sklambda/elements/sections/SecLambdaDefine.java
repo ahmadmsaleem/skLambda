@@ -30,7 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Name("Lambda Definition")
-@Description("Defines a lambda and assigns it to a variable. The body uses `return X` to produce a value.")
+@Description("Defines a lambda and assigns it to a variable.")
 @Example("""
 		set {_double} to lambda (n: number) -> number:
 			return {_n} * 2
@@ -93,7 +93,7 @@ public class SecLambdaDefine extends EffectSection implements ReturnHandler<Obje
 				for (String piece : inside.split(",")) {
 					String[] kv = piece.split(":", 2);
 					if (kv.length != 2) {
-						Skript.error("Lambda parameter must look like `name: type` (got `" + piece.trim() + "`).");
+						Skript.error("Lambda parameter must look like name: type (got " + piece.trim() + ").");
 						return false;
 					}
 					String name = kv[0].trim();

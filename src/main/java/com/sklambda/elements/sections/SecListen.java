@@ -29,6 +29,7 @@ import org.jetbrains.annotations.Nullable;
 import org.skriptlang.skript.registration.SyntaxInfo;
 import org.skriptlang.skript.registration.SyntaxRegistry;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,21 +38,39 @@ import java.util.regex.Pattern;
 
 @Name("Listen Section")
 @Description("""
-		Declarative event listener.
-		- `listen for <event> [where <cond>]:` registers immediately.
-		- `set %~object% to listener for <event> [where <cond>]:` defines for later `register`.
-		Body entries: `countdown: <timespan>`, `triggers: <number>`.
-		Body sub-sections: `on trigger:`, `on completion:`, `on timeout:`.""")
+		Declarative event listener. Two forms:
+		- `listen for <event> [where <cond>]:` — registers immediately.
+		- `set %~object% to listener for <event> [where <cond>]:` — defines for later `register`.
+
+		ENTRIES:
+		(These are all optional)
+		- `countdown:` <timespan> — auto-timeout after this duration. Required if `on timeout:` is used.
+		- `triggers:` <number> — max number of trigger fires before `on completion:` runs.
+
+		SECTIONS:
+		(These are all optional)
+		- `where:` — extra filter conditions; all must pass for the event to be considered. Combines with the inline `where <cond>` clause if both are used.
+		- `on trigger:` — runs each time the event fires (after filters pass). Inside this block: `cancel listener` to stop early without firing completion/timeout; `skip trigger` to ignore this one event without consuming a `triggers:` slot.
+		- `on completion:` — runs when `triggers:` is reached.
+		- `on timeout:` — runs when `countdown:` elapses. Requires `countdown:`.
+
+		EXPRESSIONS (valid inside any of the three callbacks):
+		- `remaining triggers` — fires left before completion.
+		- `remaining countdown` — time left before timeout.""")
 @Example("""
 		listen for block break where event-block is stone:
+			where:
+				event-player is sneaking
 			countdown: 30 seconds
 			triggers: 10
 			on trigger:
-				send "keep going..." to event-player
+				if event-world is not "world":
+					skip trigger
+				send "keep going... (%remaining triggers% left)" to event-player
 			on completion:
 				send "you did it!" to event-player
 			on timeout:
-				send "too slow!" to event-player
+				send "too slow! (%remaining triggers% left to break)" to event-player
 		""")
 @Since("0.0.1-alpha")
 public class SecListen extends EffectSection {
@@ -59,10 +78,15 @@ public class SecListen extends EffectSection {
 	private static final Pattern WHERE_PATTERN = Pattern.compile("\\s+where\\s+(.+?)\\s*$");
 
 	private static final ThreadLocal<Integer> INSIDE_ON_TRIGGER = ThreadLocal.withInitial(() -> 0);
+	private static final ThreadLocal<Integer> INSIDE_LISTEN_CALLBACK = ThreadLocal.withInitial(() -> 0);
 	private static final ThreadLocal<Boolean> SAW_COMPLETE = ThreadLocal.withInitial(() -> false);
 
 	public static boolean isInsideOnTrigger() {
 		return INSIDE_ON_TRIGGER.get() > 0;
+	}
+
+	public static boolean isInsideListenCallback() {
+		return INSIDE_LISTEN_CALLBACK.get() > 0;
 	}
 
 	public static void markSawComplete() {
@@ -85,7 +109,7 @@ public class SecListen extends EffectSection {
 	private Class<? extends Event> @Nullable [] outerEvents;
 	private @Nullable Expression<? extends Timespan> countdownExpr;
 	private @Nullable Expression<? extends Number> triggersExpr;
-	private @Nullable Condition filter;
+	private final List<Condition> filters = new ArrayList<>();
 	private @Nullable Trigger onTrigger;
 	private @Nullable Trigger onCompletion;
 	private @Nullable Trigger onTimeout;
@@ -95,7 +119,7 @@ public class SecListen extends EffectSection {
 						@NotNull ParseResult parseResult, @Nullable SectionNode sectionNode,
 						@Nullable List<TriggerItem> triggerItems) {
 		if (!hasSection() || sectionNode == null) {
-			Skript.error("`listen` requires a section body — `on trigger:` / `on completion:` / `on timeout:`.");
+			Skript.error("listen requires a section body, on trigger: / on completion: / on timeout:.");
 			return false;
 		}
 		autoRegister = matchedPattern == 0;
@@ -126,8 +150,9 @@ public class SecListen extends EffectSection {
 
 		if (whereText != null) {
 			parser.setCurrentEvent("listen filter", eventClasses);
+			Condition inlineFilter;
 			try {
-				filter = Condition.parse(whereText, "Invalid `where` condition: " + whereText);
+				inlineFilter = Condition.parse(whereText, "Invalid `where` condition: " + whereText);
 			} finally {
 				if (outerEvents != null) {
 					parser.setCurrentEvent(prevEventName, outerEvents);
@@ -135,7 +160,8 @@ public class SecListen extends EffectSection {
 					parser.deleteCurrentEvent();
 				}
 			}
-			if (filter == null) return false;
+			if (inlineFilter == null) return false;
+			filters.add(inlineFilter);
 		}
 
 		SectionNode trig = null, comp = null, tout = null;
@@ -146,85 +172,113 @@ public class SecListen extends EffectSection {
 				String text = child.getKey() == null ? "" : child.getKey();
 				int colon = text.indexOf(':');
 				if (colon < 0) {
-					Skript.error("Expected `key: value` entry or sub-section inside `listen`, got: " + text);
+					Skript.error("Expected key: value entry or sub-section inside listen, got: " + text);
 					return false;
 				}
 				String key = text.substring(0, colon).trim().toLowerCase();
 				String value = text.substring(colon + 1).trim();
 				switch (key) {
 					case "countdown" -> {
-						if (countdownExpr != null) { Skript.error("Duplicate `countdown:` entry."); return false; }
+						if (countdownExpr != null) { Skript.error("Duplicate countdown: entry."); return false; }
 						countdownExpr = parseTimespan(value);
 						if (countdownExpr == null) return false;
 					}
 					case "triggers" -> {
-						if (triggersExpr != null) { Skript.error("Duplicate `triggers:` entry."); return false; }
+						if (triggersExpr != null) { Skript.error("Duplicate triggers: entry."); return false; }
 						triggersExpr = parseNumber(value);
 						if (triggersExpr == null) return false;
 					}
 					default -> {
-						Skript.error("Unknown entry `" + key + ":` inside `listen` — expected `countdown:` or `triggers:`.");
+						Skript.error("Unknown entry " + key + ": inside listen expected countdown: or triggers:.");
 						return false;
 					}
 				}
 			} else if (child instanceof SectionNode subNode) {
 				String key = subNode.getKey() == null ? "" : subNode.getKey().trim().toLowerCase();
 				switch (key) {
+					case "where" -> {
+						parser.setCurrentEvent("listen filter", eventClasses);
+						try {
+							for (Node line : subNode) {
+								if (!(line instanceof SimpleNode)) {
+									Skript.error("where: only accepts condition lines.");
+									return false;
+								}
+								String text = line.getKey() == null ? "" : line.getKey().trim();
+								if (text.isEmpty()) continue;
+								Condition c = Condition.parse(text, "Invalid where condition: " + text);
+								if (c == null) return false;
+								filters.add(c);
+							}
+						} finally {
+							if (outerEvents != null) {
+								parser.setCurrentEvent(prevEventName, outerEvents);
+							} else {
+								parser.deleteCurrentEvent();
+							}
+						}
+					}
 					case "on trigger" -> {
-						if (trig != null) { Skript.error("Duplicate `on trigger` block."); return false; }
+						if (trig != null) { Skript.error("Duplicate on trigger block."); return false; }
 						trig = subNode;
 					}
 					case "on completion" -> {
-						if (comp != null) { Skript.error("Duplicate `on completion` block."); return false; }
+						if (comp != null) { Skript.error("Duplicate on completion block."); return false; }
 						comp = subNode;
 					}
 					case "on timeout" -> {
-						if (tout != null) { Skript.error("Duplicate `on timeout` block."); return false; }
+						if (tout != null) { Skript.error("Duplicate on timeout block."); return false; }
 						tout = subNode;
 					}
 					default -> {
-						Skript.error("Unknown block `" + key + "` inside `listen` — expected `on trigger`, `on completion`, or `on timeout`.");
+						Skript.error("Unknown block " + key + " inside listen, expected where, on trigger, on completion, or on timeout.");
 						return false;
 					}
 				}
 			} else {
-				Skript.error("Unexpected line inside `listen` block.");
+				Skript.error("Unexpected line inside listen block.");
 				return false;
 			}
 		}
 		if (!anyChild) {
-			Skript.error("`listen` requires a body (entries or sub-sections).");
+			Skript.error("listen requires a body (entries or sub-sections).");
 			return false;
 		}
 		if (tout != null && countdownExpr == null) {
-			Skript.error("`on timeout` requires a `countdown:` entry.");
+			Skript.error("on timeout requires a countdown: entry.");
 			return false;
 		}
 
 		Class<? extends Event>[] triggerEvents = eventClassesOrDefault();
-		if (trig != null) {
-			int prevDepth = INSIDE_ON_TRIGGER.get();
-			boolean prevSaw = SAW_COMPLETE.get();
-			INSIDE_ON_TRIGGER.set(prevDepth + 1);
-			SAW_COMPLETE.set(false);
-			try {
-				onTrigger = loadCode(trig, "listen on trigger", triggerEvents);
-				if (onTrigger == null) return false;
-				if (comp != null && triggersExpr == null && !SAW_COMPLETE.get()) {
-					Skript.warning("`on completion` may never run — no `triggers:` target and no `unregister listener` call in `on trigger`.");
+		int prevCb = INSIDE_LISTEN_CALLBACK.get();
+		INSIDE_LISTEN_CALLBACK.set(prevCb + 1);
+		try {
+			if (trig != null) {
+				int prevDepth = INSIDE_ON_TRIGGER.get();
+				boolean prevSaw = SAW_COMPLETE.get();
+				INSIDE_ON_TRIGGER.set(prevDepth + 1);
+				SAW_COMPLETE.set(false);
+				try {
+					onTrigger = loadCode(trig, "listen on trigger", triggerEvents);
+					if (onTrigger == null) return false;
+					if (comp != null && triggersExpr == null && !SAW_COMPLETE.get()) {
+						Skript.warning("`on completion` may never run, no triggers: target and no `unregister listener` call in `on trigger`.");
+					}
+				} finally {
+					INSIDE_ON_TRIGGER.set(prevDepth);
+					SAW_COMPLETE.set(prevSaw);
 				}
-			} finally {
-				INSIDE_ON_TRIGGER.set(prevDepth);
-				SAW_COMPLETE.set(prevSaw);
 			}
-		}
-		if (comp != null) {
-			onCompletion = loadCode(comp, "listen on completion", triggerEvents);
-			if (onCompletion == null) return false;
-		}
-		if (tout != null) {
-			onTimeout = loadCode(tout, "listen on timeout", timeoutEventClasses());
-			if (onTimeout == null) return false;
+			if (comp != null) {
+				onCompletion = loadCode(comp, "listen on completion", triggerEvents);
+				if (onCompletion == null) return false;
+			}
+			if (tout != null) {
+				onTimeout = loadCode(tout, "listen on timeout", timeoutEventClasses());
+				if (onTimeout == null) return false;
+			}
+		} finally {
+			INSIDE_LISTEN_CALLBACK.set(prevCb);
 		}
 		return true;
 	}
@@ -272,12 +326,15 @@ public class SecListen extends EffectSection {
 			if (ts != null) delayTicks = Math.max(1, ts.getAs(Timespan.TimePeriod.TICK));
 		}
 
-		Listener listener = new Listener(skriptEvent, eventClasses, filter, onTrigger, onCompletion, onTimeout, targetCount, delayTicks);
+		Listener listener = new Listener(skriptEvent, eventClasses, filters, onTrigger, onCompletion, onTimeout, targetCount, delayTicks);
 		listener.captureFrom(event);
 
 		if (autoRegister) {
 			listener.register();
 		} else {
+			if (this.target.getSingle(event) instanceof Listener oldListener) {
+				oldListener.unregister();
+			}
 			this.target.change(event, new Object[]{listener}, ChangeMode.SET);
 		}
 		return walk(event, false);

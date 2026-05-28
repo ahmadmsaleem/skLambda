@@ -4,11 +4,13 @@ import org.apache.tools.ant.filters.ReplaceTokens
 
 plugins {
     id 'java'
+    id("com.gradleup.shadow") version "9.3.1"
+
 }
 
 group 'com.skLambda'
 
-version '0.0.1-alpha'
+version '0.0.2-alpha'
 
 compileJava.options.encoding = 'UTF-8'
 
@@ -39,8 +41,7 @@ dependencies {
         transitive = false
     }
 
-    // TODO: Add your addon's dependencies here
-    // implementation 'com.sk89q.worldguard:worldguard-bukkit:7.0.8'
+    implementation("org.bstats:bstats-bukkit:3.2.1")
 }
 
 // Replaces @version@ tokens in resource files with the actual version
@@ -65,4 +66,22 @@ tasks.register('nightlyBuild', Jar) {
     dependsOn nightlyResources
     from sourceSets.main.output
     archiveFileName = 'skLambda-nightly.jar'
+}
+
+tasks.shadowJar {
+    archiveFileName = project.name + "-" + project.version + ".jar"
+    archiveClassifier.set("")
+    configurations = [project.configurations.runtimeClasspath]
+    dependencies {
+        // Only include bStats inside the jar
+        exclude { it.moduleGroup != "org.bstats" }
+    }
+    relocate("org.bstats", project.group.toString() + ".metrics")
+
+    exclude("META-INF/**", "LICENSE")
+}
+
+tasks.jar {
+    enabled = false
+    dependsOn(tasks.shadowJar)
 }
