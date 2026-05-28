@@ -21,11 +21,15 @@ import org.skriptlang.skript.registration.DefaultSyntaxInfos;
 import org.skriptlang.skript.registration.SyntaxRegistry;
 
 @Name("Listener Countdown Remaining")
-@Description("""
-		How much time is left before a listener's countdown fires `on timeout`.
-		- `remaining countdown` (no operand) only works inside an `on trigger` block.
-		- `countdown of %listener%` / `%listener%'s countdown` work anywhere.
-		Adding/removing time reschedules the pending timeout so `on timeout` fires at the new instant.""")
+@Description({
+		"How much time is left before a listener's countdown fires `on timeout`.",
+		"",
+		"Forms:",
+		"\t`remaining countdown` (no operand) only works inside an `on trigger` block.",
+		"\t`countdown of %listener%` and `%listener%'s countdown` work anywhere.",
+		"",
+		"Adding or removing time reschedules the pending timeout so `on timeout` fires at the new instant."
+})
 @Example("""
 		listen for damage:
 			countdown: 30 seconds

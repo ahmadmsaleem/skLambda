@@ -37,26 +37,25 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Name("Listen Section")
-@Description("""
-		Declarative event listener. Two forms:
-		- `listen for <event> [where <cond>]:` — registers immediately.
-		- `set %~object% to listener for <event> [where <cond>]:` — defines for later `register`.
-
-		ENTRIES:
-		(These are all optional)
-		- `countdown:` <timespan> — auto-timeout after this duration. Required if `on timeout:` is used.
-		- `triggers:` <number> — max number of trigger fires before `on completion:` runs.
-
-		SECTIONS:
-		(These are all optional)
-		- `where:` — extra filter conditions; all must pass for the event to be considered. Combines with the inline `where <cond>` clause if both are used.
-		- `on trigger:` — runs each time the event fires (after filters pass). Inside this block: `cancel listener` to stop early without firing completion/timeout; `skip trigger` to ignore this one event without consuming a `triggers:` slot.
-		- `on completion:` — runs when `triggers:` is reached.
-		- `on timeout:` — runs when `countdown:` elapses. Requires `countdown:`.
-
-		EXPRESSIONS (valid inside any of the three callbacks):
-		- `remaining triggers` — fires left before completion.
-		- `remaining countdown` — time left before timeout.""")
+@Description({
+		"Declarative event listener. Two forms are available:",
+		"\t`listen for event [where cond]:` registers immediately.",
+		"\t`set %~object% to listener for event [where cond]:` defines the listener for later activation via `register`.",
+		"",
+		"Optional entries:",
+		"\t`countdown: timespan` sets an auto-timeout duration. Required when `on timeout:` is used.",
+		"\t`triggers: number` caps how many times the listener fires before `on completion:` runs.",
+		"",
+		"Optional sections:",
+		"\t`where:` adds extra filter conditions that must all pass. Combines with any inline `where` clause.",
+		"\t`on trigger:` runs each time the event fires after filters pass. Inside it, `cancel listener` stops early without firing completion or timeout, and `skip trigger` ignores the current event without consuming a `triggers:` slot.",
+		"\t`on completion:` runs once `triggers:` is reached.",
+		"\t`on timeout:` runs when `countdown:` elapses.",
+		"",
+		"Expressions valid inside any callback:",
+		"\t`remaining triggers` reports the fires left before completion.",
+		"\t`remaining countdown` reports the time left before timeout."
+})
 @Example("""
 		listen for block break where event-block is stone:
 			where:
