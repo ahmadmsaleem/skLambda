@@ -1,12 +1,18 @@
 package com.sklambda;
 
 import ch.njol.skript.Skript;
+import org.bstats.bukkit.Metrics;
 import ch.njol.skript.util.Version;
+import com.sklambda.elements.conditions.CondListenerState;
 import com.sklambda.elements.effects.EffCancelListener;
+import com.sklambda.elements.effects.EffPauseListener;
 import com.sklambda.elements.effects.EffRegisterListener;
 import com.sklambda.elements.effects.EffRunLambda;
+import com.sklambda.elements.effects.EffSkipTrigger;
 import com.sklambda.elements.effects.EffUnregisterListener;
 import com.sklambda.elements.expressions.ExprCallLambda;
+import com.sklambda.elements.expressions.ExprListenerCountdown;
+import com.sklambda.elements.expressions.ExprListenerTriggers;
 import com.sklambda.elements.sections.SecLambdaDefine;
 import com.sklambda.elements.sections.SecListen;
 import com.sklambda.elements.types.Lambda;
@@ -22,6 +28,7 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 public class SkLambda extends JavaPlugin implements AddonModule {
 
 	private static @Nullable SkLambda instance;
+	int pluginId = 31630;
 
 	public static @Nullable SkLambda getInstance() {
 		return instance;
@@ -42,9 +49,13 @@ public class SkLambda extends JavaPlugin implements AddonModule {
 
 		instance = this;
 
+		new Metrics(this, pluginId);
+
 		SkriptAddon addon = Skript.instance().registerAddon(SkLambda.class, "skLambda");
 		addon.localizer().setSourceDirectories("lang", null);
 		addon.loadModules(this);
+
+
 	}
 
 	@Override
@@ -69,6 +80,11 @@ public class SkLambda extends JavaPlugin implements AddonModule {
 		EffCancelListener.register(registry);
 		EffRegisterListener.register(registry);
 		EffUnregisterListener.register(registry);
+		EffSkipTrigger.register(registry);
+		EffPauseListener.register(registry);
+		CondListenerState.register(registry);
+		ExprListenerTriggers.register(registry);
+		ExprListenerCountdown.register(registry);
 	}
 
 }

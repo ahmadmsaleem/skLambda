@@ -4,13 +4,11 @@ main: com.sklambda.SkLambda
 api-version: 1.19
 # Plugin name — this is what shows in /plugins
 name: skLambda
-# TODO: Change to your name
-authors: ['YourName']
+authors: ['Ahmad Saleem']
 description: Adds first-class lambdas to Skript.
 # @version@ is replaced with the actual version from build.gradle during build
 version: @version@
-# TODO: Change to your repository URL
-website: https://github.com/YourName/skLambda
+website: https://modrinth.com/plugin/sklambda
 # softdepend = optional dependency (won't crash if missing, but loads after these plugins)
 # depend = required dependency (server won't start without it)
 # Skript should be softdepend because we handle the missing check ourselves in onEnable()

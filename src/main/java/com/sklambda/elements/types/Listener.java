@@ -22,10 +22,12 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
 
 public final class Listener implements org.bukkit.event.Listener {
 
 	private static final ThreadLocal<Deque<Listener>> CONTEXT_STACK = ThreadLocal.withInitial(ArrayDeque::new);
+	public static final ThreadLocal<Boolean> SKIP_FLAG = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
 	public static @Nullable Listener currentContext() {
 		return CONTEXT_STACK.get().peek();
@@ -33,32 +35,36 @@ public final class Listener implements org.bukkit.event.Listener {
 
 	private final SkriptEvent skriptEvent;
 	private final Class<? extends Event>[] eventClasses;
-	private final @Nullable Condition filter;
+	private final List<Condition> filters;
 	private final @Nullable Trigger onTrigger;
 	private final @Nullable Trigger onCompletion;
 	private final @Nullable Trigger onTimeout;
-	private final int targetTriggers;
-	private final long timeoutTicks;
+
+	private int targetTriggers;
+	private long initialTimeoutTicks;
 
 	private @Nullable Object localsSnapshot;
 	private @Nullable Event lastFiredEvent;
 	private @Nullable Event registrationEvent;
 	private int currentTriggers;
 	private @Nullable BukkitTask timeoutTask;
+	private long timeoutEndMillis = -1;
 	private boolean active;
+	private boolean paused;
+	private long pausedRemainingMs = -1;
 	private boolean shouldCancel;
 
-	public Listener(SkriptEvent skriptEvent, Class<? extends Event>[] eventClasses, @Nullable Condition filter,
+	public Listener(SkriptEvent skriptEvent, Class<? extends Event>[] eventClasses, List<Condition> filters,
 					@Nullable Trigger onTrigger, @Nullable Trigger onCompletion, @Nullable Trigger onTimeout,
 					int targetTriggers, long timeoutTicks) {
 		this.skriptEvent = skriptEvent;
 		this.eventClasses = eventClasses;
-		this.filter = filter;
+		this.filters = filters;
 		this.onTrigger = onTrigger;
 		this.onCompletion = onCompletion;
 		this.onTimeout = onTimeout;
 		this.targetTriggers = targetTriggers;
-		this.timeoutTicks = timeoutTicks;
+		this.initialTimeoutTicks = timeoutTicks;
 	}
 
 	/** Captures locals and the registration event for later replay in completion/timeout. */
@@ -72,6 +78,8 @@ public final class Listener implements org.bukkit.event.Listener {
 		Plugin plugin = SkLambda.getInstance();
 		if (plugin == null) return false;
 		active = true;
+		paused = false;
+		pausedRemainingMs = -1;
 		shouldCancel = false;
 		currentTriggers = 0;
 		lastFiredEvent = null;
@@ -79,8 +87,8 @@ public final class Listener implements org.bukkit.event.Listener {
 		for (Class<? extends Event> eventClass : eventClasses) {
 			Bukkit.getPluginManager().registerEvent(eventClass, this, EventPriority.NORMAL, executor, plugin, false);
 		}
-		if (timeoutTicks > 0) {
-			timeoutTask = Bukkit.getScheduler().runTaskLater(plugin, this::fireTimeout, timeoutTicks);
+		if (initialTimeoutTicks > 0) {
+			scheduleTimeout(initialTimeoutTicks);
 		}
 		return true;
 	}
@@ -95,30 +103,81 @@ public final class Listener implements org.bukkit.event.Listener {
 		shouldCancel = true;
 	}
 
+	public synchronized boolean isActive() {
+		return active;
+	}
+
+	public synchronized boolean isPaused() {
+		return active && paused;
+	}
+
+	public synchronized boolean pause() {
+		if (!active || paused) return false;
+		paused = true;
+		if (timeoutEndMillis > 0) {
+			pausedRemainingMs = Math.max(0, timeoutEndMillis - System.currentTimeMillis());
+		} else {
+			pausedRemainingMs = -1;
+		}
+		if (timeoutTask != null) {
+			timeoutTask.cancel();
+			timeoutTask = null;
+		}
+		timeoutEndMillis = -1;
+		return true;
+	}
+
+	public synchronized boolean resume() {
+		if (!active || !paused) return false;
+		paused = false;
+		if (pausedRemainingMs > 0) {
+			long ticks = Math.max(1, pausedRemainingMs / 50);
+			scheduleTimeout(ticks);
+		}
+		pausedRemainingMs = -1;
+		return true;
+	}
+
 	private void handle(Event event) {
-		if (!active || !skriptEvent.check(event)) return;
+		if (!active || paused || !skriptEvent.check(event)) return;
+		Object preexisting = Variables.copyLocalVariables(event);
 		if (localsSnapshot != null) Variables.setLocalVariables(event, localsSnapshot);
+		boolean skipped = false;
 		try {
-			if (filter != null && !filter.check(event)) return;
+			for (Condition c : filters) {
+				if (!c.check(event)) return;
+			}
 			if (onTrigger != null) {
+				SKIP_FLAG.set(Boolean.FALSE);
+				currentTriggers++;
 				CONTEXT_STACK.get().push(this);
 				try {
 					onTrigger.execute(event);
 				} finally {
 					CONTEXT_STACK.get().pop();
 				}
-				lastFiredEvent = event;
+				skipped = SKIP_FLAG.get();
+				SKIP_FLAG.set(Boolean.FALSE);
+				if (skipped) {
+					currentTriggers--;
+				} else {
+					lastFiredEvent = event;
+				}
 			}
 		} finally {
-			localsSnapshot = Variables.copyLocalVariables(event);
-			Variables.removeLocals(event);
+			Object updated = Variables.copyLocalVariables(event);
+			if (updated != null) localsSnapshot = updated;
+			if (preexisting != null) {
+				Variables.setLocalVariables(event, preexisting);
+			} else {
+				Variables.removeLocals(event);
+			}
 		}
 
 		if (shouldCancel) {
 			teardown();
 			return;
 		}
-		if (onTrigger != null) currentTriggers++;
 		if (targetTriggers > 0 && currentTriggers >= targetTriggers) fireCompletion(event);
 	}
 
@@ -138,22 +197,106 @@ public final class Listener implements org.bukkit.event.Listener {
 	}
 
 	private void runWith(Trigger trigger, Event event) {
+		Object preexisting = Variables.copyLocalVariables(event);
 		if (localsSnapshot != null) Variables.setLocalVariables(event, localsSnapshot);
+		CONTEXT_STACK.get().push(this);
 		try {
 			trigger.execute(event);
-			localsSnapshot = Variables.copyLocalVariables(event);
+			Object updated = Variables.copyLocalVariables(event);
+			if (updated != null) localsSnapshot = updated;
 		} finally {
-			Variables.removeLocals(event);
+			CONTEXT_STACK.get().pop();
+			if (preexisting != null) {
+				Variables.setLocalVariables(event, preexisting);
+			} else {
+				Variables.removeLocals(event);
+			}
 		}
 	}
 
 	private void teardown() {
 		active = false;
+		paused = false;
+		pausedRemainingMs = -1;
 		HandlerList.unregisterAll(this);
 		if (timeoutTask != null) {
 			timeoutTask.cancel();
 			timeoutTask = null;
 		}
+		timeoutEndMillis = -1;
+	}
+
+	private void scheduleTimeout(long ticks) {
+		Plugin plugin = SkLambda.getInstance();
+		if (plugin == null) return;
+		long clamped = Math.max(1, ticks);
+		timeoutEndMillis = System.currentTimeMillis() + clamped * 50L;
+		timeoutTask = Bukkit.getScheduler().runTaskLater(plugin, this::fireTimeout, clamped);
+	}
+
+	// ---- triggers (remaining count) ----
+
+	public synchronized int getRemainingTriggers() {
+		if (targetTriggers <= 0) return 0;
+		return Math.max(0, targetTriggers - currentTriggers);
+	}
+
+	public synchronized void addTriggers(int delta) {
+		if (delta == 0) return;
+		targetTriggers = Math.max(0, targetTriggers + delta);
+	}
+
+	public synchronized void setRemainingTriggers(int remaining) {
+		targetTriggers = currentTriggers + Math.max(0, remaining);
+	}
+
+	// ---- countdown (remaining time) ----
+
+	public synchronized long getRemainingCountdownMillis() {
+		if (!active) {
+			return initialTimeoutTicks > 0 ? initialTimeoutTicks * 50L : 0;
+		}
+		if (paused) return Math.max(0, pausedRemainingMs);
+		if (timeoutEndMillis < 0) return 0;
+		return Math.max(0, timeoutEndMillis - System.currentTimeMillis());
+	}
+
+	public synchronized void addCountdownMillis(long deltaMs) {
+		if (deltaMs == 0) return;
+		if (!active) {
+			initialTimeoutTicks = Math.max(0, initialTimeoutTicks + deltaMs / 50);
+			return;
+		}
+		long newEnd;
+		if (timeoutEndMillis < 0) {
+			if (deltaMs <= 0) return;
+			newEnd = System.currentTimeMillis() + deltaMs;
+		} else {
+			newEnd = timeoutEndMillis + deltaMs;
+		}
+		rescheduleTo(newEnd);
+	}
+
+	public synchronized void setCountdownMillis(long ms) {
+		long clamped = Math.max(0, ms);
+		if (!active) {
+			initialTimeoutTicks = clamped / 50;
+			return;
+		}
+		rescheduleTo(System.currentTimeMillis() + clamped);
+	}
+
+	private void rescheduleTo(long endMillis) {
+		if (timeoutTask != null) {
+			timeoutTask.cancel();
+			timeoutTask = null;
+		}
+		timeoutEndMillis = endMillis;
+		Plugin plugin = SkLambda.getInstance();
+		if (plugin == null) return;
+		long remainingMs = endMillis - System.currentTimeMillis();
+		long ticks = Math.max(1, remainingMs / 50);
+		timeoutTask = Bukkit.getScheduler().runTaskLater(plugin, this::fireTimeout, ticks);
 	}
 
 	@Override

@@ -7,6 +7,7 @@ import ch.njol.skript.doc.Since;
 import ch.njol.skript.lang.Effect;
 import ch.njol.skript.lang.Expression;
 import ch.njol.skript.lang.SkriptParser.ParseResult;
+import ch.njol.skript.util.LiteralUtils;
 import ch.njol.util.Kleenean;
 import com.sklambda.elements.types.Lambda;
 import org.bukkit.event.Event;
@@ -37,7 +38,10 @@ public class EffRunLambda extends Effect {
 	@Override
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		lambdaExpr = exprs[0];
-		argsExpr = exprs[1];
+		if (exprs[1] != null) {
+			argsExpr = LiteralUtils.defendExpression(exprs[1]);
+			return LiteralUtils.canInitSafely(argsExpr);
+		}
 		return true;
 	}
 
