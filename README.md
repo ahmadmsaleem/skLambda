@@ -2,13 +2,6 @@
 
 A Skript addon adding **first-class lambdas** and a **declarative `listen` section** with countdowns, trigger limits, and lifecycle callbacks.
 
-- **Lambdas** — define inline anonymous functions, pass them as values, call/run them later
-- **`listen` section** — register temporary event listeners with a `countdown:`, a `triggers:` budget, and `on trigger` / `on completion` / `on timeout` callbacks
-- **`where:` filters** — pre-filter events with one or more conditions before they reach `on trigger`
-- **Runtime control** — `pause`, `resume`, `cancel listener`, `skip trigger`, mutate `triggers` and `countdown` from anywhere
-
-## Showcase: with vs without skLambda
-
 A 30-second / 10-block stone-mining challenge that rewards a diamond on completion or scolds the player on timeout.
 
 ### Without skLambda
@@ -31,12 +24,12 @@ command /challenge:
         set {challenge::%player%} to true
         set {challenge::progress::%player%} to 0
         send "mine 10 stone in 30s" to player
-        set {challenge::task::%player%} to a new task that runs in 30 seconds:
-            if {challenge::%player%} is set:
-                send "too slow" to player
-                delete {challenge::%player%}
-                delete {challenge::progress::%player%}
-                delete {challenge::task::%player%}
+        wait 30 seconds
+        if {challenge::%player%} is set:
+            send "too slow" to player
+            delete {challenge::%player%}
+            delete {challenge::progress::%player%}
+            delete {challenge::task::%player%}
 ```
 
 Notes on what we had to do by hand: a global `on break of stone` that fires for *every* player, an external `{challenge::%player%}` flag to gate it, a progress counter, manual timeout via a separate scheduled task, and three `delete` lines per exit path to clean up.
