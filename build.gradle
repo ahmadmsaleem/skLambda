@@ -1,0 +1,68 @@
+// Ant's ReplaceTokens is used to replace @version@ in resource files (plugin.yml, default.lang)
+// with the actual project version during build
+import org.apache.tools.ant.filters.ReplaceTokens
+
+plugins {
+    id 'java'
+}
+
+group 'com.skLambda'
+
+version '0.0.1-alpha'
+
+compileJava.options.encoding = 'UTF-8'
+
+java {
+    toolchain {
+        // Skript 2.14.0+ requires Java 21
+        languageVersion.set(JavaLanguageVersion.of(21))
+    }
+}
+
+repositories {
+    mavenCentral()
+    // Skript releases
+    maven { url 'https://repo.skriptlang.org/releases' }
+    // Paper API
+    maven { url 'https://repo.papermc.io/repository/maven-public/' }
+}
+
+dependencies {
+    // @NotNull / @Nullable annotations — compile-time only, no runtime overhead
+    implementation group: 'org.jetbrains', name: 'annotations', version: '24.1.0'
+
+    // Paper API — Skript is Paper-only
+    implementation group: 'io.papermc.paper', name: 'paper-api', version: '1.19.4-R0.1-SNAPSHOT'
+
+    // Skript — transitive=false because we only need the Skript API, not its dependencies
+    implementation (group: 'com.github.SkriptLang', name: 'Skript', version: '2.14.3') {
+        transitive = false
+    }
+
+    // TODO: Add your addon's dependencies here
+    // implementation 'com.sk89q.worldguard:worldguard-bukkit:7.0.8'
+}
+
+// Replaces @version@ tokens in resource files with the actual version
+processResources {
+    filter ReplaceTokens, tokens: [
+        'version': version
+    ]
+}
+
+// Nightly build — appends git commit hash to version (e.g., 0.0.1-alpha-nightly-abc1234)
+tasks.register('nightlyResources', ProcessResources) {
+    from 'src/main/resources', {
+        include '**'
+        filter ReplaceTokens, tokens: [
+                'version': project.property('version') + '-nightly-' + 'git rev-parse --short HEAD'.execute().text.trim()
+        ]
+    }
+    into 'build/resources/main'
+}
+
+tasks.register('nightlyBuild', Jar) {
+    dependsOn nightlyResources
+    from sourceSets.main.output
+    archiveFileName = 'skLambda-nightly.jar'
+}

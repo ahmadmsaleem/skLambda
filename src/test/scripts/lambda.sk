@@ -1,0 +1,32 @@
+test "skLambda - typed single-arg lambda returns value":
+	set {_double} to lambda (n: number) -> number:
+		return {_n} * 2
+	set {_x} to call {_double} with 5
+	assert {_x} is 10 with "expected 10, got %{_x}%"
+
+test "skLambda - invoke is an alias for call":
+	set {_double} to lambda (n: number) -> number:
+		return {_n} * 2
+	set {_x} to invoke {_double} with 7
+	assert {_x} is 14 with "expected 14, got %{_x}%"
+
+test "skLambda - no-arg lambda":
+	set {_const} to lambda -> number:
+		return 42
+	set {_x} to invoke {_const}
+	assert {_x} is 42 with "expected 42, got %{_x}%"
+
+test "skLambda - run discards return value":
+	set {_counter} to 0
+	set {_inc} to lambda:
+		add 1 to {_counter}
+	run {_inc}
+	run {_inc}
+	run {_inc}
+	assert {_counter} is 3 with "expected 3, got %{_counter}%"
+
+test "skLambda - multi-arg lambda":
+	set {_sum} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_x} to call {_sum} with 3, 4
+	assert {_x} is 7 with "expected 7, got %{_x}%"

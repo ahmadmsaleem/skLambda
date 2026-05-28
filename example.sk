@@ -1,0 +1,58 @@
+# skLambda 
+
+# 1. lambda: typed args + return
+command /double <number>:
+    trigger:
+        set {_double} to lambda (n: number) -> number:
+            return {_n} * 2
+        set {_r} to call lambda {_double} with arg-1
+        send "%arg-1% * 2 = %{_r}%" to sender
+
+# 2. lambda: side effect only (run)
+command /shout <player> <text>:
+    trigger:
+        set {_shout} to lambda (p: player, msg: text):
+            send "<gold>[shout]</gold> %{_msg}%" to {_p}
+        run lambda {_shout} with arg-1, arg-2
+
+# 3. listen: mine 10 stone in 30s
+command /challenge:
+    trigger:
+        send "<yellow>mine 10 stone in 30s" to sender
+        listen for block break where event-block is stone:
+            countdown: 30 seconds
+            triggers: 10
+            on trigger:
+                send "<gray>keep going..." to event-player
+            on completion:
+                send "<green>done!" to event-player
+                give 5 diamond to event-player
+            on timeout:
+                send "<red>too slow" to event-player
+        send "<gray>this should be triggered directly after the listener is registered" to player
+
+# 4. listen: unregister listener
+command /nextchat:
+    trigger:
+        set {_player} to sender
+        send "<gray>say something..." to {_player}
+        listen for chat:
+            on trigger:
+                send "<aqua>you said: %message%" to {_player}
+                unregister listener
+
+# 5. declared listener: register / unregister from outside
+on load:
+    set {chat_log} to listener for chat:
+        on trigger:
+            send "[chat] %sender%: %message%" to console
+            cancel event
+
+command /chatlog <text>:
+    trigger:
+        if arg-1 is "on":
+            register {chat_log}
+            send "<green>logging on" to sender
+        else:
+            unregister {chat_log}
+            send "<red>logging off" to sender

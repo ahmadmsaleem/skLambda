@@ -1,0 +1,16 @@
+# Language file — defines custom type names and enum values for Skript
+# @version@ is replaced during build
+version: @version@
+
+# Register custom type names here. The ¦ symbol separates singular from plural suffix.
+# These names are what users type in Skript scripts.
+# Example:
+# types:
+#     customtype: custom type¦s       -> "custom type" (singular) / "custom types" (plural)
+#     myregion: my region¦s            -> "my region" / "my regions"
+
+# Register enum values here. The key must match the ClassInfo name.
+# Example:
+# my enum values:
+#     value_one: first, one
+#     value_two: second, two

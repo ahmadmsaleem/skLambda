@@ -1,0 +1,22 @@
+name: Java CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'adopt'
+          java-version: '21'
+      - name: Build with Gradle
+        run: ./gradlew nightlyBuild
+      - name: Upload Nightly Build
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: skLambda-nightly
+          path: build/libs/skLambda-nightly.jar
