@@ -1,7 +1,7 @@
 # Main class — must match your JavaPlugin class (package + class name)
 main: com.sklambda.SkLambda
 # Minimum Bukkit API version your addon supports
-api-version: 1.19
+api-version: 1.21
 # Plugin name — this is what shows in /plugins
 name: skLambda
 authors: ['Ahmad Saleem']

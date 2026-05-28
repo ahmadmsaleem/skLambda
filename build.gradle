@@ -34,10 +34,10 @@ dependencies {
     implementation group: 'org.jetbrains', name: 'annotations', version: '24.1.0'
 
     // Paper API — Skript is Paper-only
-    implementation group: 'io.papermc.paper', name: 'paper-api', version: '1.19.4-R0.1-SNAPSHOT'
+    implementation group: 'io.papermc.paper', name: 'paper-api', version: '1.21.1-R0.1-SNAPSHOT'
 
     // Skript — transitive=false because we only need the Skript API, not its dependencies
-    implementation (group: 'com.github.SkriptLang', name: 'Skript', version: '2.14.3') {
+    implementation (group: 'com.github.SkriptLang', name: 'Skript', version: '2.15.0') {
         transitive = false
     }
 
