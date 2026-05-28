@@ -1,8 +1,13 @@
 # skLambda
 
-A Skript addon adding **first-class lambdas** and a **declarative `listen` section** with countdowns, trigger limits, and lifecycle callbacks.
+A Skript addon that adds two things:
 
-A 30-second / 10-block stone-mining challenge that rewards a diamond on completion or scolds the player on timeout.
+1. **Lambdas** — small functions you can save in a variable and run later.
+2. **The `listen` section** — a short way to make a temporary event listener with a timer, a hit count, and what to do at the end.
+
+## Example: same task, two ways
+
+The task: tell the player to mine 10 stone in 30 seconds. Give a diamond if they finish. Say "too slow" if they don't.
 
 ### Without skLambda
 
@@ -17,7 +22,6 @@ on break of stone:
         give 1 diamond to player
         delete {challenge::%player%}
         delete {challenge::progress::%player%}
-        delete {challenge::task::%player%}
 
 command /challenge:
     trigger:
@@ -29,10 +33,14 @@ command /challenge:
             send "too slow" to player
             delete {challenge::%player%}
             delete {challenge::progress::%player%}
-            delete {challenge::task::%player%}
 ```
 
-Notes on what we had to do by hand: a global `on break of stone` that fires for *every* player, an external `{challenge::%player%}` flag to gate it, a progress counter, manual timeout via a separate scheduled task, and three `delete` lines per exit path to clean up.
+This works, but you have to do a lot by hand:
+- A global `on break of stone` that runs for **every** player on the server.
+- A flag variable to know which player is in the challenge.
+- A counter variable.
+- A separate `wait 30 seconds` to handle the timeout.
+- Lots of `delete` lines to clean up.
 
 ### With skLambda
 
@@ -52,21 +60,32 @@ command /challenge:
                 send "too slow!" to event-player
 ```
 
-The listener is per-invocation, the counter and timeout are built in, and teardown happens automatically when either callback fires.
+That's it. The listener belongs to this one command run. The counter and the timer are built in. When it finishes or times out, it cleans up by itself.
 
 ## Quick reference
 
-### Lambda
+### Lambdas
+
+A lambda is a small function. You can save it, pass it around, and call it later.
 
 ```applescript
 set {_double} to lambda (n: number) -> number:
     return {_n} * 2
 
 set {_x} to call lambda {_double} with 5     # 10
-run lambda {_greet} with player              # fire-and-forget
+run lambda {_greet} with player              # just run it, no return value
 ```
 
 ### Listen
+
+A `listen` section makes a temporary event listener. You can give it:
+
+- `where:` — extra rules. The event must match all of them.
+- `countdown:` — a time limit.
+- `triggers:` — a max number of times it can fire.
+- `on trigger:` — what to do each time it fires.
+- `on completion:` — what to do when `triggers:` is reached.
+- `on timeout:` — what to do when `countdown:` runs out.
 
 ```applescript
 listen for damage:
@@ -77,7 +96,7 @@ listen for damage:
     triggers: 5
     on trigger:
         if attacker is not a player:
-            skip trigger                     # ignore this event, don't consume a trigger
+            skip trigger          # don't count this hit, keep listening
         cancel event
     on completion:
         send "shield used up" to {_p}
@@ -85,30 +104,42 @@ listen for damage:
         send "shield expired" to {_p}
 ```
 
-### Runtime control
+Inside any of the three callbacks you can use:
+
+- `remaining triggers` — how many fires are left.
+- `remaining countdown` — how much time is left.
+
+### Saving a listener for later
+
+You can also save a listener in a variable and start it whenever you want.
 
 ```applescript
 set {shield} to listener for damage where victim is {_p}:
     ...
 register {shield}
+```
 
-pause {shield}
-resume {shield}
+### Controlling a listener
 
-add 10 seconds to {shield}'s countdown
-set triggers of {shield} to 3
+```applescript
+pause {shield}                          # stop reacting to events, freeze the timer
+resume {shield}                         # start again
+
+add 10 seconds to {shield}'s countdown  # change the timer
+set triggers of {shield} to 3           # change the hit count
 
 if {shield} is registered:
     ...
 if {shield} is paused:
     resume {shield}
 
-unregister {shield}        # silent stop from outside
-# or, inside `on trigger`:
-cancel listener            # silent stop from inside
+unregister {shield}                     # stop it from the outside
 ```
 
-`remaining triggers` and `remaining countdown` are usable inside any of the three callbacks.
+Inside `on trigger:` you also have:
+
+- `cancel listener` — stop the listener now, don't fire completion or timeout.
+- `skip trigger` — ignore this one event, keep listening, don't count it.
 
 ## Build
 
