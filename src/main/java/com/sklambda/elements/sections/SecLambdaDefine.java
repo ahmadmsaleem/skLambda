@@ -15,18 +15,18 @@ import ch.njol.skript.lang.ReturnableTrigger;
 import ch.njol.skript.lang.SkriptParser.ParseResult;
 import ch.njol.skript.lang.TriggerItem;
 import ch.njol.skript.lang.Variable;
-import ch.njol.skript.registrations.Classes;
+import ch.njol.skript.variables.HintManager;
 import ch.njol.util.Kleenean;
 import com.sklambda.elements.events.LambdaInvocationEvent;
 import com.sklambda.elements.types.Lambda;
 import com.sklambda.elements.types.Lambda.Param;
+import com.sklambda.elements.types.LambdaSignature;
 import org.bukkit.event.Event;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.skriptlang.skript.registration.SyntaxInfo;
 import org.skriptlang.skript.registration.SyntaxRegistry;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Name("Lambda Definition")
@@ -71,65 +71,31 @@ public class SecLambdaDefine extends EffectSection implements ReturnHandler<Obje
 			return false;
 		}
 
-		params = new ArrayList<>();
-		returnType = null;
 		String spec = parseResult.regexes.isEmpty() ? "" : parseResult.regexes.get(0).group().trim();
-		if (!parseSpec(spec)) return false;
+		LambdaSignature.Result signature = LambdaSignature.parse(spec);
+		if (signature == null) return false;
+		params = signature.params();
+		returnType = signature.returnType();
 
 		Class<? extends Event>[] events = (Class<? extends Event>[]) new Class<?>[]{LambdaInvocationEvent.class};
 		trigger = loadReturnableSectionCode(sectionNode, "lambda", events);
-		return true;
-	}
+		if (trigger == null) return false;
 
-	private boolean parseSpec(String spec) {
-		if (spec.startsWith("(")) {
-			int close = spec.indexOf(')');
-			if (close < 0) {
-				Skript.error("Unclosed lambda parameter list.");
-				return false;
-			}
-			String inside = spec.substring(1, close).trim();
-			if (!inside.isEmpty()) {
-				for (String piece : inside.split(",")) {
-					String[] kv = piece.split(":", 2);
-					if (kv.length != 2) {
-						Skript.error("Lambda parameter must look like name: type (got " + piece.trim() + ").");
-						return false;
-					}
-					String name = kv[0].trim();
-					String typeName = kv[1].trim();
-					ClassInfo<?> info = Classes.getClassInfoFromUserInput(typeName);
-					if (info == null) {
-						Skript.error("Unknown lambda parameter type: " + typeName);
-						return false;
-					}
-					params.add(new Param(name, info));
-				}
-			}
-			spec = spec.substring(close + 1).trim();
-		}
-		if (spec.startsWith("->")) {
-			String typeName = spec.substring(2).trim();
-			if (!typeName.isEmpty()) {
-				ClassInfo<?> info = Classes.getClassInfoFromUserInput(typeName);
-				if (info == null) {
-					Skript.error("Unknown lambda return type: " + typeName);
-					return false;
-				}
-				returnType = info;
-			}
-			spec = "";
-		}
-		if (!spec.isEmpty()) {
-			Skript.error("Unexpected text in lambda signature: " + spec);
-			return false;
+		// Record a local-variable type hint so Skript knows this variable holds a lambda.
+		// No-op unless the script enables Skript's experimental `using type hints`.
+		if (HintManager.canUseHints((Variable<?>) target)) {
+			getParser().getHintManager().set((Variable<?>) target, Lambda.class);
 		}
 		return true;
 	}
 
 	@Override
 	protected @Nullable TriggerItem walk(@NotNull Event event) {
-		Lambda lambda = new Lambda(params, returnType, trigger);
+		ReturnableTrigger<Object> body = trigger;
+		Lambda lambda = new Lambda(params, returnType, invocation -> {
+			body.execute(invocation);
+			return invocation.getReturnValue();
+		});
 		target.change(event, new Object[]{lambda}, ChangeMode.SET);
 		return walk(event, false);
 	}

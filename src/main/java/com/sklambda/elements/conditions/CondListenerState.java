@@ -32,12 +32,12 @@ public class CondListenerState extends Condition {
 		registry.register(SyntaxRegistry.CONDITION, SyntaxInfo.builder(CondListenerState.class)
 				.supplier(CondListenerState::new)
 				.addPatterns(
-						"%object% is registered [listener]",
-						"%object% (isn't|is not) registered [listener]",
-						"%object% is paused [listener]",
-						"%object% (isn't|is not) paused [listener]",
-						"%object% is (resumed|running|active) [listener]",
-						"%object% (isn't|is not) (resumed|running|active) [listener]")
+						"%listener% is registered [listener]",
+						"%listener% (isn't|is not) registered [listener]",
+						"%listener% is paused [listener]",
+						"%listener% (isn't|is not) paused [listener]",
+						"%listener% is (resumed|running|active) [listener]",
+						"%listener% (isn't|is not) (resumed|running|active) [listener]")
 				.build());
 	}
 
@@ -54,8 +54,8 @@ public class CondListenerState extends Condition {
 
 	@Override
 	public boolean check(@NotNull Event event) {
-		Object value = listenerExpr.getSingle(event);
-		if (!(value instanceof Listener listener)) return isNegated();
+		Listener listener = Listener.from(listenerExpr.getSingle(event));
+		if (listener == null) return isNegated();
 		boolean result = switch (mode) {
 			case REGISTERED -> listener.isActive();
 			case PAUSED -> listener.isPaused();

@@ -10,6 +10,7 @@ public final class LambdaInvocationEvent extends Event {
 	private static final HandlerList HANDLERS = new HandlerList();
 
 	private @Nullable Object returnValue;
+	private Object @NotNull [] args = new Object[0];
 
 	public @Nullable Object getReturnValue() {
 		return returnValue;
@@ -17,6 +18,15 @@ public final class LambdaInvocationEvent extends Event {
 
 	public void setReturnValue(@Nullable Object value) {
 		this.returnValue = value;
+	}
+
+	/** The positional arguments this lambda was invoked with. */
+	public Object @NotNull [] getArgs() {
+		return args;
+	}
+
+	public void setArgs(Object @NotNull [] args) {
+		this.args = args;
 	}
 
 	@Override

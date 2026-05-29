@@ -1,0 +1,31 @@
+# skLambda configuration
+# Changes apply on server start/reload.
+
+# Feature toggles. A disabled feature registers no syntax at all.
+# All default to true (enabled).
+
+# Lambdas: the `lambda` type, `set ... to lambda`, inline lambdas,
+# `call`/`run lambda`, and the `passes` predicate condition.
+lambda: true
+
+# Listeners: the `listen` section, register/unregister/pause/resume,
+# `remaining triggers` / `remaining countdown`, and listener state conditions.
+listener: true
+
+# Notify in the console when a newer version of skLambda is available.
+# (Not implemented yet — reserved for a future release.)
+update-notifications: true
+
+# Listener leak detector. When enabled, skLambda periodically warns in the
+# console about listeners that have stayed registered longer than 'warn-after',
+# repeating the warning every 'warn-every'. Useful for finding listeners that
+# are never unregistered. Disabled by default to keep consoles quiet.
+notifier:
+  enabled: false
+  # How long a listener may live before it is reported (a timespan, e.g. 30 seconds, 5 minutes, 2 hours).
+  warn-after: 5 minutes
+  # How often to repeat the warning for a listener that is still alive.
+  warn-every: 1 minute
+  # The console message. Placeholders: {location} = script:line where it was created,
+  # {event} = the event it listens for, {duration} = how long it has been alive.
+  message: "[skLambda] Listener created in {location} ({event}) has been alive for {duration}."
