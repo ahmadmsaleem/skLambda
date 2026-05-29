@@ -1,16 +1,10 @@
 package com.sklambda.elements.expressions;
 
-import ch.njol.skript.Skript;
 import ch.njol.skript.classes.Changer.ChangeMode;
 import ch.njol.skript.doc.Description;
 import ch.njol.skript.doc.Example;
 import ch.njol.skript.doc.Name;
 import ch.njol.skript.doc.Since;
-import ch.njol.skript.lang.Expression;
-import ch.njol.skript.lang.SkriptParser.ParseResult;
-import ch.njol.skript.lang.util.SimpleExpression;
-import ch.njol.util.Kleenean;
-import com.sklambda.elements.sections.SecListen;
 import com.sklambda.elements.types.Listener;
 import org.bukkit.event.Event;
 import org.jetbrains.annotations.NotNull;
@@ -21,10 +15,10 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 @Name("Listener Triggers Remaining")
 @Description({
 		"How many more times a listener will fire before completion.",
-		"",
+		"\t",
 		"Forms:",
-		"\t`remaining triggers` (no operand) only works inside an `on trigger` block.",
-		"\t`triggers of %listener%` and `%listener%'s triggers` work anywhere.",
+		"\t- `remaining triggers` (no operand) only works inside an `on trigger` block.",
+		"\t- `triggers of %listener%` and `%listener%'s triggers` work anywhere.",
 		"",
 		"Supports `add`, `set`, and `remove`."
 })
@@ -37,7 +31,7 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 		set triggers of {shield} to 3
 		""")
 @Since("0.0.2-alpha")
-public class ExprListenerTriggers extends SimpleExpression<Long> {
+public class ExprListenerTriggers extends ListenerPropertyExpression<Long> {
 
 	public static void register(@NotNull SyntaxRegistry registry) {
 		registry.register(SyntaxRegistry.EXPRESSION, DefaultSyntaxInfos.Expression.builder(ExprListenerTriggers.class, Long.class)
@@ -49,22 +43,9 @@ public class ExprListenerTriggers extends SimpleExpression<Long> {
 				.build());
 	}
 
-	private @Nullable Expression<Listener> listenerExpr;
-	private boolean implicit;
-
 	@Override
-	@SuppressWarnings("unchecked")
-	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
-		if (matchedPattern == 0) {
-			implicit = true;
-			if (!SecListen.isInsideListenCallback()) {
-				Skript.error("remaining triggers is only valid inside on trigger / on completion / on timeout, use triggers of %listener% outside.");
-				return false;
-			}
-		} else {
-			listenerExpr = (Expression<Listener>) exprs[0];
-		}
-		return true;
+	protected String propertyName() {
+		return "remaining triggers";
 	}
 
 	@Override
@@ -72,12 +53,6 @@ public class ExprListenerTriggers extends SimpleExpression<Long> {
 		Listener listener = resolve(event);
 		if (listener == null) return new Long[0];
 		return new Long[]{(long) listener.getRemainingTriggers()};
-	}
-
-	private @Nullable Listener resolve(Event event) {
-		if (implicit) return Listener.currentContext();
-		if (listenerExpr == null) return null;
-		return listenerExpr.getSingle(event) instanceof Listener l ? l : null;
 	}
 
 	@Override
@@ -102,20 +77,8 @@ public class ExprListenerTriggers extends SimpleExpression<Long> {
 	}
 
 	@Override
-	public boolean isSingle() {
-		return true;
-	}
-
-	@Override
 	public @NotNull Class<? extends Long> getReturnType() {
 		return Long.class;
-	}
-
-	@Override
-	public @NotNull String toString(@Nullable Event event, boolean debug) {
-		return implicit
-				? "remaining triggers"
-				: "remaining triggers of " + listenerExpr.toString(event, debug);
 	}
 
 }

@@ -21,16 +21,77 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class Listener implements org.bukkit.event.Listener {
 
 	private static final ThreadLocal<Deque<Listener>> CONTEXT_STACK = ThreadLocal.withInitial(ArrayDeque::new);
 	public static final ThreadLocal<Boolean> SKIP_FLAG = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
+	/** All currently-active listeners, in registration order. */
+	private static final Set<Listener> ACTIVE = Collections.synchronizedSet(new LinkedHashSet<>());
+	private static final AtomicLong CREATION_COUNTER = new AtomicLong();
+
 	public static @Nullable Listener currentContext() {
 		return CONTEXT_STACK.get().peek();
+	}
+
+	/** A snapshot of the active listeners, in registration order. */
+	public static List<Listener> activeListeners() {
+		synchronized (ACTIVE) {
+			return new ArrayList<>(ACTIVE);
+		}
+	}
+
+	/** Unregisters every active listener; returns how many were stopped. */
+	public static int unregisterAll() {
+		int count = 0;
+		for (Listener listener : activeListeners()) {
+			if (listener.unregister()) count++;
+		}
+		return count;
+	}
+
+	/** The most recently created listener that is still active, or null if none are. */
+	public static @Nullable Listener lastCreated() {
+		synchronized (ACTIVE) {
+			Listener latest = null;
+			for (Listener listener : ACTIVE) {
+				if (latest == null || listener.creationId > latest.creationId) latest = listener;
+			}
+			return latest;
+		}
+	}
+
+	/** Warns (once per {@code warnEveryMs}) about every active listener alive longer than {@code warnAfterMs}. */
+	public static void notifierScan(long warnAfterMs, long warnEveryMs, String template) {
+		long now = System.currentTimeMillis();
+		for (Listener listener : activeListeners()) {
+			listener.maybeWarn(now, warnAfterMs, warnEveryMs, template);
+		}
+	}
+
+	/** Formats a duration in milliseconds as a compact "1h 2m 3s" string. */
+	public static String formatDuration(long ms) {
+		long totalSeconds = Math.max(0, ms) / 1000;
+		long hours = totalSeconds / 3600;
+		long minutes = (totalSeconds % 3600) / 60;
+		long seconds = totalSeconds % 60;
+		StringBuilder sb = new StringBuilder();
+		if (hours > 0) sb.append(hours).append("h ");
+		if (hours > 0 || minutes > 0) sb.append(minutes).append("m ");
+		return sb.append(seconds).append('s').toString();
+	}
+
+	/** Narrows an arbitrary value to a Listener, or null if it isn't one. */
+	public static @Nullable Listener from(@Nullable Object value) {
+		return value instanceof Listener listener ? listener : null;
 	}
 
 	private final SkriptEvent skriptEvent;
@@ -39,6 +100,12 @@ public final class Listener implements org.bukkit.event.Listener {
 	private final @Nullable Trigger onTrigger;
 	private final @Nullable Trigger onCompletion;
 	private final @Nullable Trigger onTimeout;
+
+	private final String sourceLocation;
+	private final String eventLabel;
+	private final long creationId = CREATION_COUNTER.incrementAndGet();
+	private long registeredAtMillis = -1;
+	private long lastWarnedAtMillis = -1;
 
 	private int targetTriggers;
 	private long initialTimeoutTicks;
@@ -53,10 +120,11 @@ public final class Listener implements org.bukkit.event.Listener {
 	private boolean paused;
 	private long pausedRemainingMs = -1;
 	private boolean shouldCancel;
+	private boolean finished;
 
 	public Listener(SkriptEvent skriptEvent, Class<? extends Event>[] eventClasses, List<Condition> filters,
 					@Nullable Trigger onTrigger, @Nullable Trigger onCompletion, @Nullable Trigger onTimeout,
-					int targetTriggers, long timeoutTicks) {
+					int targetTriggers, long timeoutTicks, String sourceLocation, String eventLabel) {
 		this.skriptEvent = skriptEvent;
 		this.eventClasses = eventClasses;
 		this.filters = filters;
@@ -65,6 +133,36 @@ public final class Listener implements org.bukkit.event.Listener {
 		this.onTimeout = onTimeout;
 		this.targetTriggers = targetTriggers;
 		this.initialTimeoutTicks = timeoutTicks;
+		this.sourceLocation = sourceLocation;
+		this.eventLabel = eventLabel;
+	}
+
+	public String getSourceLocation() {
+		return sourceLocation;
+	}
+
+	public String getEventLabel() {
+		return eventLabel;
+	}
+
+	/** How long this listener has been registered, in milliseconds, or 0 if inactive. */
+	public synchronized long getAliveMillis() {
+		return registeredAtMillis < 0 ? 0 : Math.max(0, System.currentTimeMillis() - registeredAtMillis);
+	}
+
+	private synchronized void maybeWarn(long now, long warnAfterMs, long warnEveryMs, String template) {
+		if (!active || registeredAtMillis < 0) return;
+		long alive = now - registeredAtMillis;
+		if (alive < warnAfterMs) return;
+		if (lastWarnedAtMillis >= 0 && now - lastWarnedAtMillis < warnEveryMs) return;
+		lastWarnedAtMillis = now;
+		Plugin plugin = SkLambda.getInstance();
+		if (plugin == null) return;
+		String message = template
+				.replace("{location}", sourceLocation)
+				.replace("{event}", eventLabel)
+				.replace("{duration}", formatDuration(alive));
+		plugin.getLogger().warning(message);
 	}
 
 	/** Captures locals and the registration event for later replay in completion/timeout. */
@@ -81,8 +179,12 @@ public final class Listener implements org.bukkit.event.Listener {
 		paused = false;
 		pausedRemainingMs = -1;
 		shouldCancel = false;
+		finished = false;
 		currentTriggers = 0;
 		lastFiredEvent = null;
+		registeredAtMillis = System.currentTimeMillis();
+		lastWarnedAtMillis = -1;
+		ACTIVE.add(this);
 		EventExecutor executor = (lst, evt) -> handle(evt);
 		for (Class<? extends Event> eventClass : eventClasses) {
 			Bukkit.getPluginManager().registerEvent(eventClass, this, EventPriority.NORMAL, executor, plugin, false);
@@ -130,7 +232,7 @@ public final class Listener implements org.bukkit.event.Listener {
 	public synchronized boolean resume() {
 		if (!active || !paused) return false;
 		paused = false;
-		if (pausedRemainingMs > 0) {
+		if (pausedRemainingMs >= 0) {
 			long ticks = Math.max(1, pausedRemainingMs / 50);
 			scheduleTimeout(ticks);
 		}
@@ -138,7 +240,7 @@ public final class Listener implements org.bukkit.event.Listener {
 		return true;
 	}
 
-	private void handle(Event event) {
+	private synchronized void handle(Event event) {
 		if (!active || paused || !skriptEvent.check(event)) return;
 		Object preexisting = Variables.copyLocalVariables(event);
 		if (localsSnapshot != null) Variables.setLocalVariables(event, localsSnapshot);
@@ -187,7 +289,7 @@ public final class Listener implements org.bukkit.event.Listener {
 		teardown();
 	}
 
-	private void fireTimeout() {
+	private synchronized void fireTimeout() {
 		if (!active) return;
 		Event eventToUse = lastFiredEvent != null ? lastFiredEvent
 				: registrationEvent != null ? registrationEvent
@@ -217,7 +319,10 @@ public final class Listener implements org.bukkit.event.Listener {
 	private void teardown() {
 		active = false;
 		paused = false;
+		finished = true;
 		pausedRemainingMs = -1;
+		registeredAtMillis = -1;
+		ACTIVE.remove(this);
 		HandlerList.unregisterAll(this);
 		if (timeoutTask != null) {
 			timeoutTask.cancel();
@@ -254,6 +359,7 @@ public final class Listener implements org.bukkit.event.Listener {
 
 	public synchronized long getRemainingCountdownMillis() {
 		if (!active) {
+			if (finished) return 0;
 			return initialTimeoutTicks > 0 ? initialTimeoutTicks * 50L : 0;
 		}
 		if (paused) return Math.max(0, pausedRemainingMs);

@@ -27,7 +27,7 @@ public class EffPauseListener extends Effect {
 	public static void register(@NotNull SyntaxRegistry registry) {
 		registry.register(SyntaxRegistry.EFFECT, SyntaxInfo.builder(EffPauseListener.class)
 				.supplier(EffPauseListener::new)
-				.addPatterns("pause [listener] %object%", "resume [listener] %object%")
+				.addPatterns("pause [listener] %listener%", "resume [listener] %listener%")
 				.build());
 	}
 
@@ -43,8 +43,8 @@ public class EffPauseListener extends Effect {
 
 	@Override
 	protected void execute(@NotNull Event event) {
-		Object value = listenerExpr.getSingle(event);
-		if (!(value instanceof Listener listener)) return;
+		Listener listener = Listener.from(listenerExpr.getSingle(event));
+		if (listener == null) return;
 		if (resume) listener.resume();
 		else listener.pause();
 	}

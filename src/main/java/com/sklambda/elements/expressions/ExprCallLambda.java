@@ -28,7 +28,10 @@ public class ExprCallLambda extends SimpleExpression<Object> {
 	public static void register(@NotNull SyntaxRegistry registry) {
 		registry.register(SyntaxRegistry.EXPRESSION, DefaultSyntaxInfos.Expression.builder(ExprCallLambda.class, Object.class)
 				.supplier(ExprCallLambda::new)
-				.addPatterns("(call|invoke) lambda %object% [with %-objects%]")
+				.addPatterns(
+						"[the] result of calling lambda %object% [with %-objects%]",
+						"calling lambda %object% [with %-objects%]",
+						"(call|invoke) lambda %object% [with %-objects%]")
 				.build());
 	}
 
@@ -47,8 +50,8 @@ public class ExprCallLambda extends SimpleExpression<Object> {
 
 	@Override
 	protected Object @Nullable [] get(@NotNull Event event) {
-		Object value = lambdaExpr.getSingle(event);
-		if (!(value instanceof Lambda lambda)) return null;
+		Lambda lambda = Lambda.from(lambdaExpr.getSingle(event));
+		if (lambda == null) return null;
 		Object[] args = argsExpr != null ? argsExpr.getArray(event) : new Object[0];
 		Object result = lambda.invoke(args);
 		if (result == null) return null;

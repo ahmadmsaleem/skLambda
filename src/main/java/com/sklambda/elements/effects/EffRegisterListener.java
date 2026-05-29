@@ -29,7 +29,7 @@ public class EffRegisterListener extends Effect {
 	public static void register(@NotNull SyntaxRegistry registry) {
 		registry.register(SyntaxRegistry.EFFECT, SyntaxInfo.builder(EffRegisterListener.class)
 				.supplier(EffRegisterListener::new)
-				.addPatterns("register %object%")
+				.addPatterns("register %listener%")
 				.build());
 	}
 
@@ -43,8 +43,8 @@ public class EffRegisterListener extends Effect {
 
 	@Override
 	protected void execute(@NotNull Event event) {
-		Object value = listenerExpr.getSingle(event);
-		if (value instanceof Listener listener) listener.register();
+		Listener listener = Listener.from(listenerExpr.getSingle(event));
+		if (listener != null) listener.register();
 	}
 
 	@Override

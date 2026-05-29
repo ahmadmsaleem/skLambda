@@ -10,7 +10,7 @@ plugins {
 
 group 'com.skLambda'
 
-version '0.0.2-alpha'
+version '0.0.3-alpha'
 
 compileJava.options.encoding = 'UTF-8'
 

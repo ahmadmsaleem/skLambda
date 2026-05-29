@@ -30,3 +30,50 @@ test "skLambda - multi-arg lambda":
 		return {_a} + {_b}
 	set {_x} to call {_sum} with 3, 4
 	assert {_x} is 7 with "expected 7, got %{_x}%"
+
+test "skLambda - inline predicate passes":
+	set {_p} to lambda (n: number): {_n} > 3
+	assert {_p} passes for 5 with "5 > 3 should pass"
+	assert {_p} doesn't pass for 2 with "2 > 3 should not pass"
+
+test "skLambda - predicate list requires all to pass":
+	set {_a} to lambda (n: number): {_n} > 0
+	set {_b} to lambda (n: number): {_n} < 100
+	add {_a} to {_checks::*}
+	add {_b} to {_checks::*}
+	assert {_checks::*} passes for 50 with "both predicates should pass for 50"
+	assert {_checks::*} doesn't pass for 200 with "second predicate fails for 200"
+
+test "skLambda - all of is the same as bare passes":
+	set {_a} to lambda (n: number): {_n} > 0
+	set {_b} to lambda (n: number): {_n} < 100
+	add {_a} to {_checks::*}
+	add {_b} to {_checks::*}
+	assert all of {_checks::*} passes for 50 with "all of should pass for 50"
+	assert all of {_checks::*} doesn't pass for 200 with "all of should fail for 200"
+
+test "skLambda - any of passes when at least one passes":
+	set {_a} to lambda (n: number): {_n} > 100
+	set {_b} to lambda (n: number): {_n} < 0
+	add {_a} to {_checks::*}
+	add {_b} to {_checks::*}
+	assert any of {_checks::*} passes for 500 with "first predicate passes for 500"
+	assert any of {_checks::*} doesn't pass for 50 with "neither predicate passes for 50"
+
+test "skLambda - none of passes when no predicate passes":
+	set {_a} to lambda (n: number): {_n} > 100
+	set {_b} to lambda (n: number): {_n} < 0
+	add {_a} to {_checks::*}
+	add {_b} to {_checks::*}
+	assert none of {_checks::*} passes for 50 with "no predicate passes for 50"
+	assert none of {_checks::*} doesn't pass for 500 with "first predicate passes for 500, so none-of fails"
+
+test "skLambda - leading not negates a predicate":
+	set {_p} to lambda (n: number): {_n} > 3
+	assert not {_p} passes for 2 with "2 > 3 is false, so 'not passes' holds"
+	assert {_p} passes for 5 with "5 > 3 should pass"
+
+test "skLambda - inline lambda assigned then called":
+	set {_dbl} to lambda (n: number) -> number:
+		return {_n} * 2
+	assert (call lambda {_dbl} with 8) is 16 with "expected 16"

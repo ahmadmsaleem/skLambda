@@ -1,7 +1,7 @@
 # skLambda 
 
 # ============================================================
-# Full showcases — 4 examples exercising the entire feature set
+# Full showcases — examples exercising the entire feature set
 # ============================================================
 
 # Showcase 1: parkour challenge
@@ -153,3 +153,137 @@ command /guessgame:
                 if {guess::%{_p}%} is paused:
                     resume {guess::%{_p}%}
                     send "<green>go!" to {_p}
+
+
+# Showcase 5: access gates with predicates
+# Uses: inline lambdas (condition body), `passes`, list of predicates
+# (all must pass), negated `doesn't pass`
+command /staffcheck:
+    trigger:
+        set {_p} to sender
+        # a single inline predicate
+        set {is-op} to lambda (p: player): {_p} is op
+        if {is-op} passes for {_p}:
+            send "<green>you're staff" to {_p}
+        else:
+            send "<red>staff only" to {_p}
+
+
+command /adminsetup:
+    trigger:
+        # build a list of requirements — admin = ALL of them pass
+        clear {is-admin::*}
+        add lambda (p: player): {_p} is op to {is-admin::*}
+        add lambda (p: player): name of {_p} is "eult" to {is-admin::*}
+        send "<gray>admin predicates registered (%size of {is-admin::*}% checks)" to sender
+
+
+command /admincheck:
+    trigger:
+        set {_p} to sender
+        if {is-admin::*} passes for {_p}:           # true only if every check passes
+            send "<gold>welcome, admin" to {_p}
+        if {is-admin::*} doesn't pass for {_p}:     # true if any check fails
+            send "<red>not quite admin" to {_p}
+
+
+# Showcase 6: a predicate as a reusable listen filter
+# Uses: inline predicate stored in a variable, `passes for` inside `where`
+command /stonewatch:
+    trigger:
+        set {_p} to sender
+        set {is-stone} to lambda (b: block): {_b} is stone
+        send "<yellow>break some stone..." to {_p}
+        listen for block break where {is-stone} passes for event-block:
+            triggers: 5
+            on trigger:
+                send "<aqua>stone! (%remaining triggers% to go)" to event-player
+            on completion:
+                send "<green>nice, 5 stone broken" to event-player
+
+
+# Showcase 7: turning a function into a lambda
+# Uses: `function lambda`, then the three equivalent call forms
+function double(amount: number) :: number:
+    return {_amount} * 2
+
+command /functionlambda:
+    trigger:
+        set {_p} to sender
+        # wrap the existing `double` function in a lambda you can store and pass around
+        set {_reward} to function lambda "double"
+
+        # these three lines are all equivalent
+        set {_a} to call lambda {_reward} with 5
+        set {_b} to calling lambda {_reward} with 5
+        set {_c} to the result of calling lambda {_reward} with 5
+        send "<green>double(5) = %{_a}% = %{_b}% = %{_c}%" to {_p}
+
+        # a function-lambda is a normal lambda — run it or hand it off like any other
+        run lambda {_reward} with 21
+        add {_reward} to {_doublers::*}
+        send "<gray>stored %size of {_doublers::*}% doubler(s)" to {_p}
+
+
+# Showcase 8: bulk listener cleanup
+# Uses: `unregister the last created listener`, `unregister all listeners`,
+# and `/sklambda listeners` (run in console/chat) to inspect what's alive.
+# Tip: enable the `notifier` section in config.yml to get console warnings
+# about listeners that are never cleaned up (helps find leaks).
+command /spawnwatchers:
+    trigger:
+        set {_p} to sender
+        listen for block break:
+            on trigger:
+                send "<aqua>block broken" to {_p}
+        listen for chat:
+            on trigger:
+                send "<aqua>chat seen" to {_p}
+        send "<yellow>two watchers running — check '/sklambda listeners'" to {_p}
+
+command /undolast:
+    trigger:
+        unregister the last created listener      # stops just the most recent one
+        send "<gray>undid the last watcher" to sender
+
+command /listenerpanic:
+    trigger:
+        # NOTE: this stops EVERY active listener on the server, from all scripts
+        unregister all listeners
+        send "<red>all listeners cleared" to sender
+
+
+# Showcase 9: predicate combinators — all of / any of / none of / not
+# Uses: inline predicates, a predicate list with quantifiers, `passes for`.
+# Run it as op vs. not-op (and with/without the staff.mod permission) to see
+# each quantifier flip.
+command /combinators:
+    trigger:
+        set {_p} to sender
+        set {_is-op} to lambda (p: player): {_p} is op
+        add lambda (p: player): {_p} is op to {_mod::*}
+        add lambda (p: player): {_p} has permission "staff.mod" to {_mod::*}
+
+        # bare `passes` == `all of`: every predicate must pass
+        if all of {_mod::*} passes for {_p}:
+            send "<green>all of: op AND has staff.mod" to {_p}
+        else:
+            send "<gray>all of: not both" to {_p}
+
+        # `any of`: OR — at least one passes
+        if any of {_mod::*} passes for {_p}:
+            send "<green>any of: op OR has staff.mod" to {_p}
+        else:
+            send "<gray>any of: neither" to {_p}
+
+        # `none of`: true only when every predicate fails
+        if none of {_mod::*} passes for {_p}:
+            send "<gold>none of: neither op nor staff.mod" to {_p}
+
+        # leading `not` inverts a single predicate
+        if not {_is-op} passes for {_p}:
+            send "<gray>not: you are not op" to {_p}
+
+        # the bare form is identical to `all of`
+        if {_mod::*} passes for {_p}:
+            send "<aqua>bare `passes` matched the same as `all of`" to {_p}

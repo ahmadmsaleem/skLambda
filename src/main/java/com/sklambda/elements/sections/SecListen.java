@@ -20,6 +20,7 @@ import ch.njol.skript.lang.TriggerItem;
 import ch.njol.skript.lang.Variable;
 import ch.njol.skript.lang.parser.ParserInstance;
 import ch.njol.skript.util.Timespan;
+import ch.njol.skript.variables.HintManager;
 import ch.njol.util.Kleenean;
 import com.sklambda.elements.events.ListenerDetachedEvent;
 import com.sklambda.elements.types.Listener;
@@ -33,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -103,6 +105,8 @@ public class SecListen extends EffectSection {
 
 	private boolean autoRegister;
 	private @Nullable Expression<?> target;
+	private String sourceLocation = "unknown";
+	private String eventLabel = "";
 	private SkriptEvent skriptEvent;
 	private Class<? extends Event>[] eventClasses;
 	private Class<? extends Event> @Nullable [] outerEvents;
@@ -138,6 +142,10 @@ public class SecListen extends EffectSection {
 			full = full.substring(0, m.start());
 		}
 		String eventPattern = full.trim();
+		eventLabel = eventPattern;
+		String fileName = sectionNode.getConfig().getFileName();
+		int slash = Math.max(fileName.lastIndexOf('/'), fileName.lastIndexOf('\\'));
+		sourceLocation = (slash >= 0 ? fileName.substring(slash + 1) : fileName) + ":" + sectionNode.getLine();
 
 		skriptEvent = SkriptEvent.parse(eventPattern, sectionNode, "Unrecognized event pattern: " + eventPattern);
 		if (skriptEvent == null) return false;
@@ -148,19 +156,14 @@ public class SecListen extends EffectSection {
 		String prevEventName = parser.getCurrentEventName();
 
 		if (whereText != null) {
-			parser.setCurrentEvent("listen filter", eventClasses);
-			Condition inlineFilter;
-			try {
-				inlineFilter = Condition.parse(whereText, "Invalid `where` condition: " + whereText);
-			} finally {
-				if (outerEvents != null) {
-					parser.setCurrentEvent(prevEventName, outerEvents);
-				} else {
-					parser.deleteCurrentEvent();
-				}
-			}
-			if (inlineFilter == null) return false;
-			filters.add(inlineFilter);
+			String text = whereText;
+			boolean ok = withFilterEvent(parser, prevEventName, () -> {
+				Condition inlineFilter = Condition.parse(text, "Invalid `where` condition: " + text);
+				if (inlineFilter == null) return false;
+				filters.add(inlineFilter);
+				return true;
+			});
+			if (!ok) return false;
 		}
 
 		SectionNode trig = null, comp = null, tout = null;
@@ -196,9 +199,9 @@ public class SecListen extends EffectSection {
 				String key = subNode.getKey() == null ? "" : subNode.getKey().trim().toLowerCase();
 				switch (key) {
 					case "where" -> {
-						parser.setCurrentEvent("listen filter", eventClasses);
-						try {
-							for (Node line : subNode) {
+						SectionNode whereNode = subNode;
+						boolean ok = withFilterEvent(parser, prevEventName, () -> {
+							for (Node line : whereNode) {
 								if (!(line instanceof SimpleNode)) {
 									Skript.error("where: only accepts condition lines.");
 									return false;
@@ -209,13 +212,9 @@ public class SecListen extends EffectSection {
 								if (c == null) return false;
 								filters.add(c);
 							}
-						} finally {
-							if (outerEvents != null) {
-								parser.setCurrentEvent(prevEventName, outerEvents);
-							} else {
-								parser.deleteCurrentEvent();
-							}
-						}
+							return true;
+						});
+						if (!ok) return false;
 					}
 					case "on trigger" -> {
 						if (trig != null) { Skript.error("Duplicate on trigger block."); return false; }
@@ -279,12 +278,33 @@ public class SecListen extends EffectSection {
 		} finally {
 			INSIDE_LISTEN_CALLBACK.set(prevCb);
 		}
+
+		// Record a local-variable type hint so Skript knows this variable holds a listener.
+		// No-op unless the script enables Skript's experimental `using type hints`.
+		if (!autoRegister && target instanceof Variable<?> var && HintManager.canUseHints(var)) {
+			getParser().getHintManager().set(var, Listener.class);
+		}
 		return true;
+	}
+
+	private boolean withFilterEvent(ParserInstance parser, @Nullable String prevEventName, BooleanSupplier body) {
+		parser.setCurrentEvent("listen filter", eventClasses);
+		try {
+			return body.getAsBoolean();
+		} finally {
+			if (outerEvents != null) {
+				parser.setCurrentEvent(prevEventName, outerEvents);
+			} else {
+				parser.deleteCurrentEvent();
+			}
+		}
 	}
 
 	@SuppressWarnings("unchecked")
 	private Class<? extends Event>[] eventClassesOrDefault() {
-		return (Class<? extends Event>[]) new Class<?>[]{eventClasses.length > 0 ? eventClasses[0] : ListenerDetachedEvent.class};
+		return eventClasses.length > 0
+				? eventClasses
+				: (Class<? extends Event>[]) new Class<?>[]{ListenerDetachedEvent.class};
 	}
 
 	@SuppressWarnings("unchecked")
@@ -325,7 +345,8 @@ public class SecListen extends EffectSection {
 			if (ts != null) delayTicks = Math.max(1, ts.getAs(Timespan.TimePeriod.TICK));
 		}
 
-		Listener listener = new Listener(skriptEvent, eventClasses, filters, onTrigger, onCompletion, onTimeout, targetCount, delayTicks);
+		Listener listener = new Listener(skriptEvent, eventClasses, filters, onTrigger, onCompletion, onTimeout,
+				targetCount, delayTicks, sourceLocation, eventLabel);
 		listener.captureFrom(event);
 
 		if (autoRegister) {

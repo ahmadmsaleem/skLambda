@@ -47,8 +47,8 @@ public class EffRunLambda extends Effect {
 
 	@Override
 	protected void execute(@NotNull Event event) {
-		Object value = lambdaExpr.getSingle(event);
-		if (!(value instanceof Lambda lambda)) return;
+		Lambda lambda = Lambda.from(lambdaExpr.getSingle(event));
+		if (lambda == null) return;
 		Object[] args = argsExpr != null ? argsExpr.getArray(event) : new Object[0];
 		lambda.invoke(args);
 	}

@@ -3,7 +3,6 @@ package com.sklambda.elements.types;
 import ch.njol.skript.classes.ClassInfo;
 import ch.njol.skript.classes.Parser;
 import ch.njol.skript.lang.ParseContext;
-import ch.njol.skript.lang.Trigger;
 import ch.njol.skript.registrations.Classes;
 import ch.njol.skript.variables.Variables;
 import com.sklambda.elements.events.LambdaInvocationEvent;
@@ -16,24 +15,34 @@ public final class Lambda {
 
 	public record Param(String name, ClassInfo<?> type) {}
 
+	@FunctionalInterface
+	public interface Body {
+		@Nullable Object run(LambdaInvocationEvent event);
+	}
+
 	private final List<Param> params;
 	private final @Nullable ClassInfo<?> returnType;
-	private final Trigger trigger;
+	private final Body body;
 
-	public Lambda(List<Param> params, @Nullable ClassInfo<?> returnType, Trigger trigger) {
+	public Lambda(List<Param> params, @Nullable ClassInfo<?> returnType, Body body) {
 		this.params = params;
 		this.returnType = returnType;
-		this.trigger = trigger;
+		this.body = body;
+	}
+
+	/** Narrows an arbitrary value to a Lambda, or null if it isn't one. */
+	public static @Nullable Lambda from(@Nullable Object value) {
+		return value instanceof Lambda lambda ? lambda : null;
 	}
 
 	public @Nullable Object invoke(Object @NotNull [] args) {
 		LambdaInvocationEvent event = new LambdaInvocationEvent();
+		event.setArgs(args);
 		int count = Math.min(args.length, params.size());
 		for (int i = 0; i < count; i++) {
 			Variables.setVariable(params.get(i).name(), args[i], event, true);
 		}
-		trigger.execute(event);
-		return event.getReturnValue();
+		return body.run(event);
 	}
 
 	@Override

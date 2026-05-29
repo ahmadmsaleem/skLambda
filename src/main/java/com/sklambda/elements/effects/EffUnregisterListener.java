@@ -26,7 +26,7 @@ public class EffUnregisterListener extends Effect {
 	public static void register(@NotNull SyntaxRegistry registry) {
 		registry.register(SyntaxRegistry.EFFECT, SyntaxInfo.builder(EffUnregisterListener.class)
 				.supplier(EffUnregisterListener::new)
-				.addPatterns("unregister %object%")
+				.addPatterns("unregister %listener%")
 				.build());
 	}
 
@@ -40,8 +40,8 @@ public class EffUnregisterListener extends Effect {
 
 	@Override
 	protected void execute(@NotNull Event event) {
-		Object value = listenerExpr.getSingle(event);
-		if (value instanceof Listener listener) listener.unregister();
+		Listener listener = Listener.from(listenerExpr.getSingle(event));
+		if (listener != null) listener.unregister();
 	}
 
 	@Override
