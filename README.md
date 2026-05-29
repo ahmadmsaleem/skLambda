@@ -1,4 +1,4 @@
-![cover](https://cdn.modrinth.com/data/cached_images/d2da0b2979fcc09fe749394a190d0d72dd9360ef.png)
+![Cover](https://cdn.modrinth.com/data/cached_images/32070cb0beb1772a327160cb7f52827138ae8c3b.png)
 
 
 A Skript addon that adds two things:
