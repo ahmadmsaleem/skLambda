@@ -1,9 +1,16 @@
-# skLambda
+![cover](https://cdn.modrinth.com/data/cached_images/d2da0b2979fcc09fe749394a190d0d72dd9360ef.png)
+
 
 A Skript addon that adds two things:
 
 1. **Lambdas** — small functions you can save in a variable and run later.
 2. **The `listen` section** — a short way to make a temporary event listener with a timer, a hit count, and what to do at the end.
+## Links
+[![github](https://cdn.modrinth.com/data/cached_images/75ce063aed1ebd362650fad14579ca22f375a392.png)](https://github.com/ahmadmsaleem/skLambda)        [![skLambda wiki](https://cdn.modrinth.com/data/cached_images/35010223dc83c95dd3b7a92740ca87eea707d709_0.webp)
+ ](https://github.com/ahmadmsaleem/skLambda/wiki)
+ 
+[![SkriptHubViewTheDocs](http://skripthub.net/static/addon/ViewTheDocsButton.png)](http://skripthub.net/docs/?addon=skLambda) [![skDocks](https://skdocs.org/viewdocs.png)](https://skdocs.org/docs?addon=skLambda)
+
 
 ## Example: same task, two ways
 
@@ -76,6 +83,45 @@ set {_x} to call lambda {_double} with 5     # 10
 run lambda {_greet} with player              # just run it, no return value
 ```
 
+You can also write a lambda **inline** on one line. If the body is a condition,
+the lambda becomes a predicate (it returns whether the condition holds);
+parameters are available as locals (`{_p}`) inside the body.
+
+```applescript
+set {is-op} to lambda (p: player): {_p} is op
+add lambda (n: number): {_n} > 0 to {positive-checks::*}
+```
+
+### Predicates
+
+`passes` invokes a lambda as a test and checks whether it returned true. With a
+list of lambdas it passes only if **all** of them pass.
+
+```applescript
+set {is-op} to lambda (p: player): {_p} is op
+
+if {is-op} passes for player:               # one predicate
+    send "you're staff" to player
+
+add lambda (p: player): {_p} is op to {is-admin::*}
+add lambda (p: player): name of {_p} is "eult" to {is-admin::*}
+
+if {is-admin::*} passes for player:         # true only if ALL pass
+    send "you're admin" to player
+
+if {is-admin::*} doesn't pass for player:   # true if at least one fails
+    send "not quite admin" to player
+```
+
+A predicate runs in its own context, so give it the value(s) it tests as
+parameters and supply them after `for`. This also tidies up `listen ... where`:
+
+```applescript
+set {is-stone} to lambda (b: block): {_b} is stone
+listen for block break where {is-stone} passes for event-block:
+    on trigger: send "stone!" to event-player
+```
+
 ### Listen
 
 A `listen` section makes a temporary event listener. You can give it:
@@ -144,8 +190,7 @@ Inside `on trigger:` you also have:
 ## Build
 
 ```bash
-./gradlew build
-# → build/libs/skLambda-<version>.jar
+./gradlew build # build/libs/skLambda-<version>.jar
 ```
 
 ## License
