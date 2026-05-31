@@ -16,10 +16,16 @@ import org.skriptlang.skript.registration.SyntaxInfo;
 import org.skriptlang.skript.registration.SyntaxRegistry;
 
 @Name("Pause / Resume Listener")
-@Description("Pauses or resumes a listener. While paused, events are ignored and the countdown is frozen.")
+@Description({
+		"Pauses or resumes a listener. While paused, events are ignored and the countdown is frozen.",
+		"\tPausing runs the listener's `on pause:` callback; resuming runs `on resume:`.",
+		"\tOther addons also use `pause`/`resume`; prefix with `skLambda` (e.g. `skLambda pause {x}`) to "
+				+ "force this effect when there's a clash."
+})
 @Example("""
 		pause {shield_listener}
 		resume {shield_listener}
+		skLambda pause {shield_listener}
 		""")
 @Since("0.0.2-alpha")
 public class EffPauseListener extends Effect {
@@ -27,7 +33,9 @@ public class EffPauseListener extends Effect {
 	public static void register(@NotNull SyntaxRegistry registry) {
 		registry.register(SyntaxRegistry.EFFECT, SyntaxInfo.builder(EffPauseListener.class)
 				.supplier(EffPauseListener::new)
-				.addPatterns("pause [listener] %listener%", "resume [listener] %listener%")
+				.addPatterns(
+						"[sklambda] pause [listener] %listener%",
+						"[sklambda] resume [listener] %listener%")
 				.build());
 	}
 

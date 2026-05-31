@@ -287,3 +287,154 @@ command /combinators:
         # the bare form is identical to `all of`
         if {_mod::*} passes for {_p}:
             send "<aqua>bare `passes` matched the same as `all of`" to {_p}
+
+
+# Showcase 10: owner-scoped listeners + scoped cleanup
+# Uses: the `owner:` entry (auto-unregisters when the owner disconnects),
+# and `unregister all listeners owned by %object%` for one-line cleanup.
+# Run /watchme to spawn two per-player watchers, then either /stopwatching
+# to drop just yours, or simply disconnect — they clean themselves up.
+command /watchme:
+    trigger:
+        set {_p} to sender
+        send "<yellow>watching your blocks & chat — these auto-clean when you leave." to {_p}
+        listen for block break:
+            owner: {_p}                  # auto-unregisters when {_p} disconnects
+            where:
+                event-player is {_p}
+            on trigger:
+                send "<aqua>you broke %event-block%" to {_p}
+        listen for chat:
+            owner: {_p}
+            where:
+                player is {_p}
+            on trigger:
+                send "<aqua>you said: %message%" to {_p}
+
+command /stopwatching:
+    trigger:
+        set {_p} to sender
+        # drops only this player's watchers, leaving everyone else's running
+        unregister all listeners owned by {_p}
+        send "<gray>stopped watching you (check '/sklambda listeners')" to {_p}
+
+
+# Showcase 11: guaranteed cleanup with `on end`
+# Uses: `on end:` — the one callback that ALWAYS runs however the listener stops
+# (completion, timeout, cancel, unregister, or owner-disconnect), plus `end reason`
+# to branch on why. One teardown path, no matter the outcome.
+# Run /session, then break 5 blocks (completion), wait 20s (timeout),
+# or /endsession (unregistered) — all three land in `on end`.
+command /session:
+    trigger:
+        set {_p} to sender
+        set {session::%{_p}%} to true
+        send "<yellow>session started: break 5 blocks in 20s. /endsession to stop early." to {_p}
+        set {watch::%{_p}%} to listener for block break where player is {_p}:
+            countdown: 20 seconds
+            triggers: 5
+            on trigger:
+                send "<aqua>%remaining triggers% blocks left" to {_p}
+            on completion:
+                send "<green>all 5 broken!" to {_p}
+            on timeout:
+                send "<red>ran out of time" to {_p}
+            on end:                          # runs on completion, timeout, AND cancel/unregister
+                delete {session::%{_p}%}     # single cleanup path, however it ended
+                if end reason is completion:
+                    send "<gray>session ended — you won" to {_p}
+                else if end reason is timeout:
+                    send "<gray>session ended — timed out" to {_p}
+                else:
+                    send "<gray>session ended — %end reason%" to {_p}
+        register {watch::%{_p}%}
+
+command /endsession:
+    trigger:
+        set {_p} to sender
+        if {watch::%{_p}%} is registered:
+            unregister {watch::%{_p}%}       # `on end` fires with end reason = unregistered
+        send "<gray>stopped your session" to {_p}
+
+
+# Showcase 12: always() / never() — constant predicates
+# Uses: the `always()` / `never()` functions as drop-in predicates. They ignore their
+# arguments — `always()` always passes, `never()` never does — so they slot in anywhere a
+# predicate is expected: a `passes` gate, a feature flag you flip by swapping one line, or a
+# `filtered where` that keeps everything / nothing.
+command /gatecheck:
+    trigger:
+        set {_p} to sender
+        # a feature flag: swap always() <-> never() to open or close the gate for everyone
+        set {_gate} to always()
+        if {_gate} passes for {_p}:
+            send "<green>gate open" to {_p}
+        else:
+            send "<red>gate closed" to {_p}
+
+        # as a list filter: always() keeps every element, never() keeps none
+        set {_kept::*} to all players filtered where always() passes
+        set {_dropped::*} to all players filtered where never() passes
+        send "<gray>always() kept %size of {_kept::*}%, never() kept %size of {_dropped::*}%" to {_p}
+
+
+# Showcase 13: list operations — map / filter / reduce / sort / count / first
+# Uses: the stored lambdas and predicates from the rest of this file, applied across a list so
+# the addon does the looping. Value-lambdas drive `mapped with` / `reduced with` / `sorted by`;
+# the predicates you already write drive `filtered where` / `count of ... where` / `first of ... where`.
+command /listops:
+    trigger:
+        set {_p} to sender
+        set {_nums::*} to 3, 5, 2, and 8
+
+        # map: transform every element (1-arg value lambda -> new list, same size)
+        set {_double} to lambda (n: number) -> number:
+            return {_n} * 2
+        set {_doubled::*} to {_nums::*} mapped with {_double}
+        send "<aqua>doubled: %{_doubled::*}%" to {_p}            # 6, 10, 4, 16
+
+        # filter: keep only matching elements (a predicate -> shorter list)
+        set {_big} to lambda (n: number): {_n} > 3
+        set {_kept::*} to {_nums::*} filtered where {_big} passes
+        send "<aqua>over 3: %{_kept::*}%" to {_p}                # 5, 8
+
+        # reduce: fold the whole list to one value (2-arg lambda: accumulator, next)
+        set {_add} to lambda (a: number, b: number) -> number:
+            return {_a} + {_b}
+        set {_total} to {_nums::*} reduced with {_add}
+        send "<green>sum = %{_total}%" to {_p}                   # add(3,5)=8, add(8,2)=10, add(10,8)=18
+
+        # count / first: same predicate, just the tally or the first hit
+        send "<aqua>%count of {_nums::*} where {_big} passes% numbers over 3" to {_p}
+        send "<aqua>first over 3: %first element of {_nums::*} where {_big} passes%" to {_p}
+
+        # sort: order a list by a key the lambda pulls out of each element
+        set {_score} to lambda (pl: player) -> number:
+            return {_pl}'s level
+        set {_ranked::*} to all players sorted by {_score}       # lowest level first
+        send "<gold>ranked by level: %{_ranked::*}%" to {_p}
+
+
+# Showcase 14: live countdown display (`every`) + per-trigger debounce (`cooldown`)
+# Uses: `every timespan:` to refresh a display on a repeating timer while the listener runs
+# (it pauses with the listener and stops when it ends), and `cooldown: timespan` to ignore
+# rapid re-triggers — debounced events don't run `on trigger` and don't count toward `triggers:`.
+command /shieldbar:
+    trigger:
+        set {_p} to sender
+        send "<gold>shield up: survive 30s or block 5 hits. rapid hits are debounced to 1/sec." to {_p}
+        listen for damage where victim is {_p}:
+            countdown: 30 seconds
+            triggers: 5
+            cooldown: 1 second                 # at most one counted hit per second
+            on trigger:
+                cancel event
+                send "<blue>blocked! (%remaining triggers% hits left)" to {_p}
+            every 1 second:                    # live action-bar readout, refreshed each second
+                send action bar "<yellow>shield %remaining countdown% | %remaining triggers% hits left" to {_p}
+            on completion:
+                send "<red>shield shattered — took 5 hits" to {_p}
+            on timeout:
+                send "<green>shield held for the full 30s" to {_p}
+            on end:
+                send action bar "" to {_p}      # clear the bar however it ended

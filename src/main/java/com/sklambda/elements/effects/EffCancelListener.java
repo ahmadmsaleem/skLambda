@@ -18,7 +18,7 @@ import org.skriptlang.skript.registration.SyntaxInfo;
 import org.skriptlang.skript.registration.SyntaxRegistry;
 
 @Name("Cancel / Unregister Listener (in trigger)")
-@Description("Silently stops the surrounding `listen`. Does not fire `on completion` or `on timeout`. Only valid inside `on trigger`. `unregister listener` and `cancel listener` are aliases.")
+@Description("Silently stops the surrounding `listen`. Does not fire `on completion` or `on timeout`, but `on end` still runs (with `end reason` = `cancelled`). Only valid inside `on trigger`. `unregister listener` and `cancel listener` are aliases.")
 @Example("""
 		listen for block break:
 			on trigger:

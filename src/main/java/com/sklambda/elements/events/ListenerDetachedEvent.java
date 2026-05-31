@@ -5,7 +5,7 @@ import org.bukkit.event.HandlerList;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Carrier event for `on completion` / `on timeout` bodies that fire outside any Bukkit event context.
+ * Carrier event for `on completion` / `on timeout` / `on end` bodies that fire outside any Bukkit event context.
  */
 public final class ListenerDetachedEvent extends Event {
 
