@@ -5,37 +5,24 @@ import org.bstats.bukkit.Metrics;
 import ch.njol.skript.util.Timespan;
 import ch.njol.skript.util.Timespan.TimePeriod;
 import ch.njol.skript.util.Version;
-import com.sklambda.elements.conditions.CondListenerState;
-import com.sklambda.elements.conditions.CondPredicatePasses;
-import com.sklambda.elements.effects.EffCancelListener;
-import com.sklambda.elements.effects.EffManageListeners;
-import com.sklambda.elements.effects.EffPauseListener;
-import com.sklambda.elements.effects.EffRegisterListener;
-import com.sklambda.elements.effects.EffRunLambda;
-import com.sklambda.elements.effects.EffSkipTrigger;
-import com.sklambda.elements.effects.EffUnregisterListener;
-import com.sklambda.elements.expressions.ExprCallLambda;
-import com.sklambda.elements.expressions.ExprFunctionLambda;
-import com.sklambda.elements.expressions.ExprLambda;
-import com.sklambda.elements.expressions.ExprListenerCountdown;
-import com.sklambda.elements.expressions.ExprListenerTriggers;
-import com.sklambda.elements.sections.SecLambdaDefine;
-import com.sklambda.elements.sections.SecListen;
-import com.sklambda.elements.types.Lambda;
 import com.sklambda.elements.types.Listener;
+import com.sklambda.modules.LambdaModule;
+import com.sklambda.modules.ListenerModule;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.skriptlang.skript.addon.AddonModule;
 import org.skriptlang.skript.addon.SkriptAddon;
-import org.skriptlang.skript.registration.SyntaxRegistry;
 
-public class SkLambda extends JavaPlugin implements AddonModule {
+import java.util.ArrayList;
+import java.util.List;
+
+public class SkLambda extends JavaPlugin {
+
+	private static final int PLUGIN_ID = 31630;
 
 	private static @Nullable SkLambda instance;
-	int pluginId = 31630;
 
 	private boolean lambdaEnabled;
 	private boolean listenerEnabled;
@@ -43,11 +30,6 @@ public class SkLambda extends JavaPlugin implements AddonModule {
 
 	public static @Nullable SkLambda getInstance() {
 		return instance;
-	}
-
-	/** Whether console update notifications are enabled. Reserved for a future update-check feature. */
-	public boolean isUpdateNotificationsEnabled() {
-		return updateNotifications;
 	}
 
 	@Override
@@ -73,16 +55,29 @@ public class SkLambda extends JavaPlugin implements AddonModule {
 			getLogger().warning("Both 'lambda' and 'listener' are disabled in config.yml .");
 		}
 
-		new Metrics(this, pluginId);
+		new Metrics(this, PLUGIN_ID);
 
 		SkriptAddon addon = Skript.instance().registerAddon(SkLambda.class, "skLambda");
 		addon.localizer().setSourceDirectories("lang", null);
-		addon.loadModules(this);
+
+		List<AddonModule> modules = new ArrayList<>();
+		if (lambdaEnabled) modules.add(new LambdaModule());
+		if (listenerEnabled) modules.add(new ListenerModule());
+		addon.loadModules(modules.toArray(new AddonModule[0]));
 
 		PluginCommand command = getCommand("sklambda");
-		if (command != null) command.setExecutor(new SkLambdaCommand(this));
+		if (command != null) {
+			SkLambdaCommand handler = new SkLambdaCommand(this);
+			command.setExecutor(handler);
+			command.setTabCompleter(handler);
+		}
 
-		if (listenerEnabled) startListenerNotifier();
+		if (listenerEnabled) {
+			Listener.installOwnerCleanup(this);
+			startListenerNotifier();
+		}
+
+		if (updateNotifications) new UpdateChecker(this);
 	}
 
 	/**
@@ -116,42 +111,6 @@ public class SkLambda extends JavaPlugin implements AddonModule {
 			ts = Timespan.parse(def);
 		}
 		return ts == null ? 0 : ts.getAs(TimePeriod.MILLISECOND);
-	}
-
-	@Override
-	public @NotNull String name() {
-		return "skLambda";
-	}
-
-	@Override
-	public void init(@NotNull SkriptAddon addon) {
-		if (lambdaEnabled) Lambda.register();
-		if (listenerEnabled) Listener.registerType();
-	}
-
-	@Override
-	public void load(@NotNull SkriptAddon addon) {
-		SyntaxRegistry registry = addon.syntaxRegistry();
-		if (lambdaEnabled) {
-			SecLambdaDefine.register(registry);
-			ExprLambda.register(registry);
-			ExprFunctionLambda.register(registry);
-			ExprCallLambda.register(registry);
-			EffRunLambda.register(registry);
-			CondPredicatePasses.register(registry);
-		}
-		if (listenerEnabled) {
-			SecListen.register(registry);
-			EffCancelListener.register(registry);
-			EffRegisterListener.register(registry);
-			EffUnregisterListener.register(registry);
-			EffSkipTrigger.register(registry);
-			EffPauseListener.register(registry);
-			EffManageListeners.register(registry);
-			CondListenerState.register(registry);
-			ExprListenerTriggers.register(registry);
-			ExprListenerCountdown.register(registry);
-		}
 	}
 
 }

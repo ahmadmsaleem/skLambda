@@ -16,7 +16,7 @@ import org.skriptlang.skript.registration.SyntaxInfo;
 import org.skriptlang.skript.registration.SyntaxRegistry;
 
 @Name("Unregister Listener")
-@Description("Stops an active listener silently (no `on completion` or `on timeout` fires). No-op if already inactive.")
+@Description("Stops an active listener silently (no `on completion` or `on timeout` fires). Its `on end` callback still runs, with `end reason` = `unregistered`. No-op if already inactive.")
 @Example("""
 		unregister {my_listener}
 		""")

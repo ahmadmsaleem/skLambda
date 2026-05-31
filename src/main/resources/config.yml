@@ -12,8 +12,7 @@ lambda: true
 # `remaining triggers` / `remaining countdown`, and listener state conditions.
 listener: true
 
-# Notify in the console when a newer version of skLambda is available.
-# (Not implemented yet — reserved for a future release.)
+# Notify op players on join when a newer skLambda release is available.
 update-notifications: true
 
 # Listener leak detector. When enabled, skLambda periodically warns in the
