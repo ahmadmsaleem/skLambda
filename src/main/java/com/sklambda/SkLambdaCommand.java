@@ -2,6 +2,7 @@ package com.sklambda;
 
 import ch.njol.skript.registrations.Classes;
 import com.sklambda.elements.types.Listener;
+import com.sklambda.elements.types.ListenerRegistry;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -58,7 +59,7 @@ public final class SkLambdaCommand implements CommandExecutor, TabCompleter {
 	}
 
 	private void sendListeners(@NotNull CommandSender sender) {
-		List<Listener> active = Listener.activeListeners();
+		List<Listener> active = ListenerRegistry.activeListeners();
 		sender.sendMessage(Component.text("Active listeners: ", NamedTextColor.RED)
 				.append(Component.text(active.size(), NamedTextColor.WHITE)));
 		for (Listener listener : active) {
@@ -67,7 +68,7 @@ public final class SkLambdaCommand implements CommandExecutor, TabCompleter {
 			String ownerSuffix = owner == null ? "" : ", owned by " + Classes.toString(owner);
 			sender.sendMessage(Component.text("- ", NamedTextColor.GRAY)
 					.append(Component.text(listener.getSourceLocation(), NamedTextColor.WHITE))
-					.append(Component.text(" " + label + ", alive " + Listener.formatDuration(listener.getAliveMillis()) + ownerSuffix, NamedTextColor.GRAY)));
+					.append(Component.text(" " + label + ", alive " + ListenerRegistry.formatDuration(listener.getAliveMillis()) + ownerSuffix, NamedTextColor.GRAY)));
 		}
 	}
 

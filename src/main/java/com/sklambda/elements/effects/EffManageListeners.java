@@ -9,6 +9,7 @@ import ch.njol.skript.lang.Expression;
 import ch.njol.skript.lang.SkriptParser.ParseResult;
 import ch.njol.util.Kleenean;
 import com.sklambda.elements.types.Listener;
+import com.sklambda.elements.types.ListenerRegistry;
 import org.bukkit.event.Event;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -59,12 +60,12 @@ public class EffManageListeners extends Effect {
 	@Override
 	protected void execute(@NotNull Event event) {
 		switch (mode) {
-			case ALL -> Listener.unregisterAll();
+			case ALL -> ListenerRegistry.unregisterAll();
 			case OWNED -> {
-				if (ownerExpr != null) Listener.unregisterAllOwnedBy(ownerExpr.getSingle(event));
+				if (ownerExpr != null) ListenerRegistry.unregisterAllOwnedBy(ownerExpr.getSingle(event));
 			}
 			case LAST -> {
-				Listener last = Listener.lastCreated();
+				Listener last = ListenerRegistry.lastCreated();
 				if (last != null) last.unregister();
 			}
 			default -> { }

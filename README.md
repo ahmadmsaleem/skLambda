@@ -3,8 +3,8 @@
 
 A Skript addon that adds two things:
 
-1. **Lambdas** — small functions you can save in a variable and run later.
-2. **The `listen` section** — a short way to make a temporary event listener with a timer, a hit count, and what to do at the end.
+1. **Lambdas**: small functions you can save in a variable and run later.
+2. **The `listen` section**: a short way to make a temporary event listener with a timer, a hit count, and what to do at the end.
 ## Links
 [![github](https://cdn.modrinth.com/data/cached_images/75ce063aed1ebd362650fad14579ca22f375a392.png)](https://github.com/ahmadmsaleem/skLambda)        [![skLambda wiki](https://cdn.modrinth.com/data/cached_images/35010223dc83c95dd3b7a92740ca87eea707d709_0.webp)
  ](https://github.com/ahmadmsaleem/skLambda/wiki)

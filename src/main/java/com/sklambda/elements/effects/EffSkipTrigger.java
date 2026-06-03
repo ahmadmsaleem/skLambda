@@ -11,7 +11,7 @@ import ch.njol.skript.lang.SkriptParser.ParseResult;
 import ch.njol.skript.lang.TriggerItem;
 import ch.njol.util.Kleenean;
 import com.sklambda.elements.sections.SecListen;
-import com.sklambda.elements.types.Listener;
+import com.sklambda.elements.types.ListenerRegistry;
 import org.bukkit.event.Event;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -48,7 +48,7 @@ public class EffSkipTrigger extends Effect {
 
 	@Override
 	protected void execute(@NotNull Event event) {
-		Listener.SKIP_FLAG.set(Boolean.TRUE);
+		ListenerRegistry.SKIP_FLAG.set(Boolean.TRUE);
 	}
 
 	@Override

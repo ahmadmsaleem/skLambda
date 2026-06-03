@@ -5,7 +5,8 @@ import org.bstats.bukkit.Metrics;
 import ch.njol.skript.util.Timespan;
 import ch.njol.skript.util.Timespan.TimePeriod;
 import ch.njol.skript.util.Version;
-import com.sklambda.elements.types.Listener;
+import com.sklambda.elements.types.ListenerRegistry;
+import com.sklambda.elements.types.OwnerCleanup;
 import com.sklambda.modules.LambdaModule;
 import com.sklambda.modules.ListenerModule;
 import org.bukkit.command.PluginCommand;
@@ -73,7 +74,7 @@ public class SkLambda extends JavaPlugin {
 		}
 
 		if (listenerEnabled) {
-			Listener.installOwnerCleanup(this);
+			OwnerCleanup.installOwnerCleanup(this);
 			startListenerNotifier();
 		}
 
@@ -98,7 +99,7 @@ public class SkLambda extends JavaPlugin {
 
 		long periodTicks = Math.max(1, Math.min(warnEveryMs, warnAfterMs) / 50);
 		getServer().getScheduler().runTaskTimer(this,
-				() -> Listener.notifierScan(warnAfterMs, warnEveryMs, message),
+				() -> ListenerRegistry.notifierScan(warnAfterMs, warnEveryMs, message),
 				periodTicks, periodTicks);
 	}
 

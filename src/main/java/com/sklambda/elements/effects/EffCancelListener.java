@@ -11,6 +11,7 @@ import ch.njol.skript.lang.SkriptParser.ParseResult;
 import ch.njol.util.Kleenean;
 import com.sklambda.elements.sections.SecListen;
 import com.sklambda.elements.types.Listener;
+import com.sklambda.elements.types.ListenerRegistry;
 import org.bukkit.event.Event;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -47,7 +48,7 @@ public class EffCancelListener extends Effect {
 
 	@Override
 	protected void execute(@NotNull Event event) {
-		Listener listener = Listener.currentContext();
+		Listener listener = ListenerRegistry.currentContext();
 		if (listener != null) listener.markCancel();
 	}
 

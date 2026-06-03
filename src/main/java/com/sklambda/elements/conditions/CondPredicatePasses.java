@@ -21,7 +21,7 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 		"Treats a lambda as a predicate: invokes it with the given arguments and checks whether it returned true.",
 		"",
 		"With a list of lambdas, an optional quantifier decides how many must pass:",
-		"\t`all of` (the default) passes only if **every** predicate passes — `{checks::*} passes` and "
+		"\t`all of` (the default) passes only if **every** predicate passes. `{checks::*} passes` and"
 				+ "`all of {checks::*} passes` mean the same thing.",
 		"\t`any of` passes if **at least one** predicate passes (OR semantics).",
 		"\t`none of` passes if **no** predicate passes.",

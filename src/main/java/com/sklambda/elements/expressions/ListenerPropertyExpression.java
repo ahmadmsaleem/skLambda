@@ -7,6 +7,7 @@ import ch.njol.skript.lang.util.SimpleExpression;
 import ch.njol.util.Kleenean;
 import com.sklambda.elements.sections.SecListen;
 import com.sklambda.elements.types.Listener;
+import com.sklambda.elements.types.ListenerRegistry;
 import org.bukkit.event.Event;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -36,7 +37,7 @@ public abstract class ListenerPropertyExpression<T> extends SimpleExpression<T> 
 	}
 
 	protected @Nullable Listener resolve(Event event) {
-		if (implicit) return Listener.currentContext();
+		if (implicit) return ListenerRegistry.currentContext();
 		if (listenerExpr == null) return null;
 		return Listener.from(listenerExpr.getSingle(event));
 	}
