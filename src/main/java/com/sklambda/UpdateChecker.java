@@ -77,7 +77,7 @@ public final class UpdateChecker implements Listener {
 		player.sendMessage(Component.text("[skLambda] ", NamedTextColor.RED)
 				.append(Component.text("A new version is available: ", NamedTextColor.WHITE))
 				.append(Component.text(tag, NamedTextColor.RED))
-				.append(Component.text(" — ", NamedTextColor.WHITE))
+				.append(Component.text(" - ", NamedTextColor.WHITE))
 				.append(Component.text("download here", NamedTextColor.GREEN)
 						.decorate(TextDecoration.UNDERLINED)
 						.clickEvent(ClickEvent.openUrl(RELEASES_PAGE))

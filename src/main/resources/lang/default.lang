@@ -1,4 +1,4 @@
-# Language file — defines custom type names and enum values for Skript
+# Language file: custom type names and enum values for Skript
 # @version@ is replaced during build
 version: @version@
 

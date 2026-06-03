@@ -35,7 +35,7 @@ import java.util.List;
 		"Defines a lambda and assigns it to a variable.",
 		"\tThe lambda closes over the local variables (`{_x}`) in scope where it is defined: a snapshot is "
 				+ "taken at definition time and is readable inside the body when the lambda is later called. "
-				+ "Parameters shadow any captured local of the same name. The snapshot is by value — later "
+				+ "Parameters shadow any captured local of the same name. The snapshot is by value, so later"
 				+ "changes to the outer local are not seen, and changes inside the body don't leak out."
 })
 @Example("""

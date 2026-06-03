@@ -9,6 +9,7 @@ import ch.njol.skript.lang.SkriptParser.ParseResult;
 import ch.njol.skript.lang.util.SimpleExpression;
 import ch.njol.util.Kleenean;
 import com.sklambda.elements.types.Listener;
+import com.sklambda.elements.types.ListenerRegistry;
 import org.bukkit.event.Event;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -20,7 +21,7 @@ import java.util.List;
 
 @Name("Active Listeners")
 @Description({
-		"The listeners currently registered on the server, in creation order — the same set `/sklambda listeners` shows.",
+		"The listeners currently registered on the server, in creation order, the same set `/sklambda listeners` shows.",
 		"\t- `[all] active listeners` is every active listener, across all scripts.",
 		"\t- `listeners owned by %object%` is only those scoped to that owner (see the `owner:` entry on `listen`)."
 })
@@ -55,7 +56,7 @@ public class ExprListeners extends SimpleExpression<Listener> {
 
 	@Override
 	protected Listener @Nullable [] get(@NotNull Event event) {
-		List<Listener> active = Listener.activeListeners();
+		List<Listener> active = ListenerRegistry.activeListeners();
 		if (mode == OWNED) {
 			Object owner = ownerExpr != null ? ownerExpr.getSingle(event) : null;
 			if (owner == null) return new Listener[0];

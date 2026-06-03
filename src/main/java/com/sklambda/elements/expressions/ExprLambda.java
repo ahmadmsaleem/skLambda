@@ -31,12 +31,12 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 @Name("Inline Lambda")
 @Description({
 		"Creates a lambda on a single line, usable anywhere an expression is. The body after `:` is one of:",
-		"\t- a condition — the lambda returns whether it holds (a predicate, see `passes`),",
-		"\t- an effect — the lambda runs it and returns nothing, or",
-		"\t- a value — `return <expression>` (or just a bare expression) makes the lambda return that value.",
+		"\t- a condition: the lambda returns whether it holds (a predicate, see `passes`),",
+		"\t- an effect: the lambda runs it and returns nothing, or",
+		"\t- a value: `return <expression>` (or just a bare expression) makes the lambda return that value.",
 		"",
 		"Parameters become locals (`{_p}`) inside the body. The lambda also closes over the local "
-				+ "variables in scope where it is written — a snapshot taken when the expression is evaluated, "
+				+ "variables in scope where it is written, a snapshot taken when the expression is evaluated, "
 				+ "readable inside the body when the lambda is later called (parameters shadow captured locals "
 				+ "of the same name). For multi-line bodies, use the `set %object% to lambda ...:` section form instead."
 })
@@ -86,7 +86,7 @@ public class ExprLambda extends SimpleExpression<Lambda> {
 			Lambda.Body body;
 			ClassInfo<?> returnType = signature.returnType();
 
-			// An explicit `return <expression>` is a value lambda — evaluate it and hand the value back.
+			// An explicit `return <expression>` is a value lambda: evaluate it and hand the value back.
 			String returnExpr = stripLeadingReturn(bodyText);
 			if (returnExpr != null) {
 				Expression<?> value = new SkriptParser(returnExpr, SkriptParser.ALL_FLAGS).parseExpression(Object.class);
@@ -114,7 +114,7 @@ public class ExprLambda extends SimpleExpression<Lambda> {
 						Expression<?> value = new SkriptParser(bodyText, SkriptParser.ALL_FLAGS).parseExpression(Object.class);
 						if (value == null) {
 							Skript.error("Can't understand this inline lambda body: " + bodyText
-									+ " — expected a condition, an effect, or a (return) value expression.");
+									+ "; expected a condition, an effect, or a (return) value expression.");
 							return false;
 						}
 						body = valueBody(value);

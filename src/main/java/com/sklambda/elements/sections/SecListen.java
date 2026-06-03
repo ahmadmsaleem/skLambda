@@ -51,7 +51,7 @@ import java.util.regex.Pattern;
 		"Optional entries:",
 		"\t`  - countdown: timespan` sets an auto-timeout duration. Required when `on timeout:` is used.",
 		"\t`  - triggers: number` caps how many times the listener fires before `on completion:` runs.",
-		"\t`  - cooldown: timespan` debounces the listener: after an accepted trigger, further events within this window are ignored — they don't run `on trigger:` and don't count toward `triggers:`. Per-listener, so scope it to a player (via `owner:`/`where`) for a per-player cooldown.",
+		"\t`  - cooldown: timespan` debounces the listener: after an accepted trigger, further events within this window are ignored, so they don't run `on trigger:` and don't count toward `triggers:`. Per-listener, so scope it to a player (via `owner:`/`where`) for a per-player cooldown.",
 		"\t`  - owner: offlineplayer/entity/chunk/world` scopes the listener to that owner and auto-unregisters when the owner goes away: a player disconnecting, an entity being removed from the world (death/despawn), or a chunk/world unloading. Any owner can be bulk-cleaned with `unregister all listeners owned by %object%`.",
 		"\t",
 		"Optional sections:",
@@ -60,7 +60,7 @@ import java.util.regex.Pattern;
 		"\t`  - on trigger:` runs each time the event fires after filters pass. Inside it, `cancel listener` stops early without firing completion or timeout, and `skip trigger` ignores the current event without consuming a `triggers:` slot.",
 		"\t`  - on completion:` runs once `triggers:` is reached.",
 		"\t`  - on timeout:` runs when `countdown:` elapses.",
-		"\t`  - on end:` runs whenever the listener stops, however it stops — after completion, after timeout, and on `cancel listener`/`unregister`/owner-disconnect cleanup. Use it for teardown; `end reason` tells you why it stopped.",
+		"\t`  - on end:` runs whenever the listener stops, however it stops: after completion, after timeout, and on `cancel listener`/`unregister`/owner-disconnect cleanup. Use it for teardown; `end reason` tells you why it stopped.",
 		"\t`  - on pause:` runs each time the listener is paused (via `pause %listener%`), after the countdown freezes.",
 		"\t`  - on resume:` runs each time the listener is resumed (via `resume %listener%`), after the countdown restarts.",
 			"\t`  - on register:` runs once the listener becomes active (immediately for `listen for ...:`, or when `register %listener%` activates a declared one), symmetric with `on end:` for setup/teardown.",
@@ -423,7 +423,7 @@ public class SecListen extends EffectSection {
 		Expression<?> e = new SkriptParser(text, SkriptParser.ALL_FLAGS)
 				.parseExpression(OfflinePlayer.class, Entity.class, Chunk.class, World.class);
 		if (e == null) {
-			Skript.error("Expected an owner — an offline player, entity, chunk, or world — but got: " + text);
+			Skript.error("Expected an owner (an offline player, entity, chunk, or world) but got: " + text);
 			return null;
 		}
 		return e;
