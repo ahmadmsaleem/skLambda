@@ -46,6 +46,10 @@ dependencies {
 
 // Replaces @version@ tokens in resource files with the actual version
 processResources {
+    // ReplaceTokens' values aren't tracked as task inputs, so without this Gradle treats the task as
+    // up-to-date after a version bump and ships a plugin.yml with the OLD version baked in. Declaring
+    // the version as an input forces processResources to re-run whenever it changes.
+    inputs.property 'version', version
     filter ReplaceTokens, tokens: [
         'version': version
     ]
