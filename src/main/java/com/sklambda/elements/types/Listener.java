@@ -10,13 +10,19 @@ import ch.njol.skript.registrations.Classes;
 import ch.njol.skript.variables.Variables;
 import com.sklambda.SkLambda;
 import com.sklambda.elements.events.ListenerDetachedEvent;
+import com.destroystokyo.paper.event.entity.EntityRemoveFromWorldEvent;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.World;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.world.ChunkUnloadEvent;
+import org.bukkit.event.world.WorldUnloadEvent;
 import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -74,7 +80,7 @@ public final class Listener implements org.bukkit.event.Listener {
 
 	/** Unregisters every active listener owned by {@code owner}; returns how many were stopped. */
 	public static int unregisterAllOwnedBy(@Nullable Object owner) {
-		if (owner == null) return 0;
+		if (owner == null || ACTIVE.isEmpty()) return 0;
 		int count = 0;
 		for (Listener listener : activeListeners()) {
 			if (listener.isOwnedBy(owner) && listener.unregister()) count++;
@@ -83,22 +89,42 @@ public final class Listener implements org.bukkit.event.Listener {
 	}
 
 	/**
-	 * Registers a one-time hook that unregisters a player's owned listeners when they disconnect.
+	 * Registers the hooks that auto-unregister owned listeners when their owner goes away:
+	 * a player disconnecting, an entity being removed from the world (death/despawn), or a
+	 * chunk/world unloading.
 	 * Call once at startup; safe to skip if the listener feature is disabled.
 	 */
 	public static void installOwnerCleanup(Plugin plugin) {
-		org.bukkit.event.Listener holder = new org.bukkit.event.Listener() {};
-		EventExecutor executor = (lst, evt) -> {
-			if (evt instanceof PlayerQuitEvent quit) unregisterAllOwnedBy(quit.getPlayer());
-		};
-		Bukkit.getPluginManager().registerEvent(PlayerQuitEvent.class, holder, EventPriority.MONITOR, executor, plugin, true);
+		registerCleanupHook(plugin, PlayerQuitEvent.class, evt -> ((PlayerQuitEvent) evt).getPlayer());
+		// Players are governed solely by PlayerQuitEvent; ignore their entity removals so a
+		// cross-world teleport (which also removes-from-world) doesn't drop their listeners.
+		registerCleanupHook(plugin, EntityRemoveFromWorldEvent.class, evt -> {
+			Entity entity = ((EntityRemoveFromWorldEvent) evt).getEntity();
+			return entity instanceof Player ? null : entity;
+		});
+		registerCleanupHook(plugin, ChunkUnloadEvent.class, evt -> ((ChunkUnloadEvent) evt).getChunk());
+		registerCleanupHook(plugin, WorldUnloadEvent.class, evt -> ((WorldUnloadEvent) evt).getWorld());
 	}
 
-	/** Whether two owner values refer to the same thing, comparing players/entities by UUID. */
+	/** Registers a MONITOR-priority hook that unregisters all listeners owned by {@code ownerOf(event)}. */
+	private static void registerCleanupHook(Plugin plugin, Class<? extends Event> eventType,
+											 java.util.function.Function<Event, @Nullable Object> ownerOf) {
+		org.bukkit.event.Listener holder = new org.bukkit.event.Listener() {};
+		EventExecutor executor = (lst, evt) -> unregisterAllOwnedBy(ownerOf.apply(evt));
+		Bukkit.getPluginManager().registerEvent(eventType, holder, EventPriority.MONITOR, executor, plugin, true);
+	}
+
+	/**
+	 * Whether two owner values refer to the same thing: players/entities by UUID, chunks by
+	 * world + coordinates, worlds by UID, everything else by {@code equals}.
+	 */
 	private static boolean sameOwner(@Nullable Object a, @Nullable Object b) {
 		if (a == null || b == null) return false;
 		if (a instanceof OfflinePlayer pa && b instanceof OfflinePlayer pb) return pa.getUniqueId().equals(pb.getUniqueId());
 		if (a instanceof Entity ea && b instanceof Entity eb) return ea.getUniqueId().equals(eb.getUniqueId());
+		if (a instanceof Chunk ca && b instanceof Chunk cb)
+			return ca.getX() == cb.getX() && ca.getZ() == cb.getZ() && ca.getWorld().getUID().equals(cb.getWorld().getUID());
+		if (a instanceof World wa && b instanceof World wb) return wa.getUID().equals(wb.getUID());
 		return a.equals(b);
 	}
 
@@ -137,6 +163,7 @@ public final class Listener implements org.bukkit.event.Listener {
 	private final @Nullable Trigger onTick;
 	private final @Nullable Trigger onPause;
 	private final @Nullable Trigger onResume;
+	private final @Nullable Trigger onRegister;
 
 	private final String sourceLocation;
 	private final String eventLabel;
@@ -176,6 +203,7 @@ public final class Listener implements org.bukkit.event.Listener {
 		this.onTick = builder.onTick;
 		this.onPause = builder.onPause;
 		this.onResume = builder.onResume;
+		this.onRegister = builder.onRegister;
 		this.targetTriggers = builder.targetTriggers;
 		this.initialTimeoutTicks = builder.timeoutTicks;
 		this.tickIntervalTicks = builder.tickIntervalTicks;
@@ -200,6 +228,7 @@ public final class Listener implements org.bukkit.event.Listener {
 		private @Nullable Trigger onTick;
 		private @Nullable Trigger onPause;
 		private @Nullable Trigger onResume;
+		private @Nullable Trigger onRegister;
 		private int targetTriggers;
 		private long timeoutTicks = -1;
 		private long tickIntervalTicks;
@@ -221,6 +250,7 @@ public final class Listener implements org.bukkit.event.Listener {
 		public Builder onTick(@Nullable Trigger onTick) { this.onTick = onTick; return this; }
 		public Builder onPause(@Nullable Trigger onPause) { this.onPause = onPause; return this; }
 		public Builder onResume(@Nullable Trigger onResume) { this.onResume = onResume; return this; }
+		public Builder onRegister(@Nullable Trigger onRegister) { this.onRegister = onRegister; return this; }
 		/** Completion target; 0 (the default) means the listener never completes on a trigger count. */
 		public Builder triggers(int targetTriggers) { this.targetTriggers = targetTriggers; return this; }
 		/** Auto-timeout delay in ticks; -1 (the default) means no timeout. */
@@ -311,6 +341,9 @@ public final class Listener implements org.bukkit.event.Listener {
 		}
 		if (onTick != null && tickIntervalTicks > 0) {
 			tickTask = Bukkit.getScheduler().runTaskTimer(plugin, this::fireTick, tickIntervalTicks, tickIntervalTicks);
+		}
+		if (onRegister != null) {
+			runWith(onRegister, callbackEvent());
 		}
 		return true;
 	}

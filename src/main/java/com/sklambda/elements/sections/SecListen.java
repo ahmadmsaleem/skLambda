@@ -24,6 +24,10 @@ import ch.njol.skript.variables.HintManager;
 import ch.njol.util.Kleenean;
 import com.sklambda.elements.events.ListenerDetachedEvent;
 import com.sklambda.elements.types.Listener;
+import org.bukkit.Chunk;
+import org.bukkit.OfflinePlayer;
+import org.bukkit.World;
+import org.bukkit.entity.Entity;
 import org.bukkit.event.Event;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -48,7 +52,7 @@ import java.util.regex.Pattern;
 		"\t`  - countdown: timespan` sets an auto-timeout duration. Required when `on timeout:` is used.",
 		"\t`  - triggers: number` caps how many times the listener fires before `on completion:` runs.",
 		"\t`  - cooldown: timespan` debounces the listener: after an accepted trigger, further events within this window are ignored — they don't run `on trigger:` and don't count toward `triggers:`. Per-listener, so scope it to a player (via `owner:`/`where`) for a per-player cooldown.",
-		"\t`  - owner: object` scopes the listener to a value (usually a player); it auto-unregisters when an owning player disconnects, and can be bulk-cleaned with `unregister all listeners owned by %object%`.",
+		"\t`  - owner: offlineplayer/entity/chunk/world` scopes the listener to that owner and auto-unregisters when the owner goes away: a player disconnecting, an entity being removed from the world (death/despawn), or a chunk/world unloading. Any owner can be bulk-cleaned with `unregister all listeners owned by %object%`.",
 		"\t",
 		"Optional sections:",
 		"\t`  - where:` adds extra filter conditions that must all pass. Combines with any inline `where` clause.",
@@ -59,6 +63,7 @@ import java.util.regex.Pattern;
 		"\t`  - on end:` runs whenever the listener stops, however it stops — after completion, after timeout, and on `cancel listener`/`unregister`/owner-disconnect cleanup. Use it for teardown; `end reason` tells you why it stopped.",
 		"\t`  - on pause:` runs each time the listener is paused (via `pause %listener%`), after the countdown freezes.",
 		"\t`  - on resume:` runs each time the listener is resumed (via `resume %listener%`), after the countdown restarts.",
+			"\t`  - on register:` runs once the listener becomes active (immediately for `listen for ...:`, or when `register %listener%` activates a declared one), symmetric with `on end:` for setup/teardown.",
 		"\t",
 		"Expressions valid inside any callback:",
 		"\t`  - remaining triggers` reports the fires left before completion.",
@@ -139,6 +144,7 @@ public class SecListen extends EffectSection {
 	private @Nullable Trigger onTick;
 	private @Nullable Trigger onPause;
 	private @Nullable Trigger onResume;
+	private @Nullable Trigger onRegister;
 
 	@Override
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed,
@@ -189,7 +195,7 @@ public class SecListen extends EffectSection {
 			if (!ok) return false;
 		}
 
-		SectionNode trig = null, comp = null, tout = null, end = null, tick = null, pause = null, resume = null;
+		SectionNode trig = null, comp = null, tout = null, end = null, tick = null, pause = null, resume = null, reg = null;
 		boolean anyChild = false;
 		for (Node child : sectionNode) {
 			anyChild = true;
@@ -215,7 +221,7 @@ public class SecListen extends EffectSection {
 					}
 					case "owner" -> {
 						if (ownerExpr != null) { Skript.error("Duplicate owner: entry."); return false; }
-						ownerExpr = parseObject(value);
+						ownerExpr = parseOwner(value);
 						if (ownerExpr == null) return false;
 					}
 					case "cooldown" -> {
@@ -281,8 +287,12 @@ public class SecListen extends EffectSection {
 						if (resume != null) { Skript.error("Duplicate on resume block."); return false; }
 						resume = subNode;
 					}
+					case "on register" -> {
+						if (reg != null) { Skript.error("Duplicate on register block."); return false; }
+						reg = subNode;
+					}
 					default -> {
-						Skript.error("Unknown block " + key + " inside listen, expected where, on trigger, on completion, on timeout, on end, on pause, on resume, or every <timespan>.");
+						Skript.error("Unknown block " + key + " inside listen, expected where, on trigger, on completion, on timeout, on end, on register, on pause, on resume, or every <timespan>.");
 						return false;
 					}
 				}
@@ -343,6 +353,10 @@ public class SecListen extends EffectSection {
 			if (resume != null) {
 				onResume = loadCode(resume, "listen on resume", timeoutEventClasses());
 				if (onResume == null) return false;
+			}
+			if (reg != null) {
+				onRegister = loadCode(reg, "listen on register", timeoutEventClasses());
+				if (onRegister == null) return false;
 			}
 		} finally {
 			INSIDE_LISTEN_CALLBACK.set(prevCb);
@@ -405,10 +419,11 @@ public class SecListen extends EffectSection {
 		return (Expression<? extends Number>) e;
 	}
 
-	private static @Nullable Expression<?> parseObject(String text) {
-		Expression<?> e = new SkriptParser(text, SkriptParser.ALL_FLAGS).parseExpression(Object.class);
+	private static @Nullable Expression<?> parseOwner(String text) {
+		Expression<?> e = new SkriptParser(text, SkriptParser.ALL_FLAGS)
+				.parseExpression(OfflinePlayer.class, Entity.class, Chunk.class, World.class);
 		if (e == null) {
-			Skript.error("Expected an owner value (e.g. a player), got: " + text);
+			Skript.error("Expected an owner — an offline player, entity, chunk, or world — but got: " + text);
 			return null;
 		}
 		return e;
@@ -443,6 +458,7 @@ public class SecListen extends EffectSection {
 				.onTick(onTick)
 				.onPause(onPause)
 				.onResume(onResume)
+				.onRegister(onRegister)
 				.triggers(targetCount)
 				.timeoutTicks(delayTicks)
 				.tickIntervalTicks(tickTicks)

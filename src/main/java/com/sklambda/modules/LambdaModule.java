@@ -2,6 +2,7 @@ package com.sklambda.modules;
 
 import com.sklambda.elements.conditions.CondPredicatePasses;
 import com.sklambda.elements.effects.EffRunLambda;
+import com.sklambda.elements.expressions.ExprBoundLambda;
 import com.sklambda.elements.expressions.ExprCallLambda;
 import com.sklambda.elements.expressions.ExprCountWhere;
 import com.sklambda.elements.expressions.ExprFiltered;
@@ -9,6 +10,8 @@ import com.sklambda.elements.expressions.ExprFirstWhere;
 import com.sklambda.elements.expressions.ExprFunctionLambda;
 import com.sklambda.elements.expressions.ExprLambda;
 import com.sklambda.elements.expressions.ExprMapped;
+import com.sklambda.elements.expressions.ExprMinMaxBy;
+import com.sklambda.elements.expressions.ExprNegatedLambda;
 import com.sklambda.elements.expressions.ExprReduced;
 import com.sklambda.elements.expressions.ExprSorted;
 import com.sklambda.elements.functions.ConstantPredicateFunctions;
@@ -45,8 +48,11 @@ public final class LambdaModule implements AddonModule {
 		ExprFiltered.register(registry);
 		ExprReduced.register(registry);
 		ExprSorted.register(registry);
+		ExprMinMaxBy.register(registry);
 		ExprCountWhere.register(registry);
 		ExprFirstWhere.register(registry);
+		ExprBoundLambda.register(registry);
+		ExprNegatedLambda.register(registry);
 		ConstantPredicateFunctions.register(addon);
 	}
 

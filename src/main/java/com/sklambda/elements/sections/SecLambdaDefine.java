@@ -16,6 +16,7 @@ import ch.njol.skript.lang.SkriptParser.ParseResult;
 import ch.njol.skript.lang.TriggerItem;
 import ch.njol.skript.lang.Variable;
 import ch.njol.skript.variables.HintManager;
+import ch.njol.skript.variables.Variables;
 import ch.njol.util.Kleenean;
 import com.sklambda.elements.events.LambdaInvocationEvent;
 import com.sklambda.elements.types.Lambda;
@@ -30,7 +31,13 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 import java.util.List;
 
 @Name("Lambda Definition")
-@Description("Defines a lambda and assigns it to a variable.")
+@Description({
+		"Defines a lambda and assigns it to a variable.",
+		"\tThe lambda closes over the local variables (`{_x}`) in scope where it is defined: a snapshot is "
+				+ "taken at definition time and is readable inside the body when the lambda is later called. "
+				+ "Parameters shadow any captured local of the same name. The snapshot is by value — later "
+				+ "changes to the outer local are not seen, and changes inside the body don't leak out."
+})
 @Example("""
 		set {_double} to lambda (n: number) -> number:
 			return {_n} * 2
@@ -95,7 +102,7 @@ public class SecLambdaDefine extends EffectSection implements ReturnHandler<Obje
 		Lambda lambda = new Lambda(params, returnType, invocation -> {
 			body.execute(invocation);
 			return invocation.getReturnValue();
-		});
+		}).capturing(Variables.copyLocalVariables(event));
 		target.change(event, new Object[]{lambda}, ChangeMode.SET);
 		return walk(event, false);
 	}
