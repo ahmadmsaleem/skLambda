@@ -77,3 +77,53 @@ test "skLambda - inline lambda assigned then called":
 	set {_dbl} to lambda (n: number) -> number:
 		return {_n} * 2
 	assert (call lambda {_dbl} with 8) is 16 with "expected 16"
+
+test "skLambda - lambda captures surrounding locals":
+	set {_base} to 100
+	set {_addbase} to lambda (n: number) -> number:
+		return {_n} + {_base}
+	delete {_base}
+	assert (call lambda {_addbase} with 5) is 105 with "captured {_base}=100 should survive, expected 105"
+
+test "skLambda - parameter shadows a captured local":
+	set {_n} to 999
+	set {_id} to lambda (n: number) -> number:
+		return {_n}
+	assert (call lambda {_id} with 7) is 7 with "the parameter should win over the captured {_n}"
+
+test "skLambda - bind pre-fills the leading argument":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_add5} to {_add} with 5 bound
+	assert (call lambda {_add5} with 10) is 15 with "5 + 10 should be 15"
+
+test "skLambda - bind all arguments yields a thunk":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_answer} to {_add} with (40, 2) bound
+	assert (call lambda {_answer}) is 42 with "40 + 2 should be 42"
+
+test "skLambda - negated flips a predicate":
+	set {_pos} to lambda (n: number): {_n} > 0
+	set {_notpos} to negated {_pos}
+	assert {_notpos} passes for -3 with "-3 is not > 0, so negated passes"
+	assert {_notpos} doesn't pass for 7 with "7 > 0, so negated should not pass"
+
+test "skLambda - reduced with an explicit seed":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_nums::*} to 3, 5, and 2
+	assert ({_nums::*} reduced with {_add} from 100) is 110 with "100 + 3 + 5 + 2 = 110"
+
+test "skLambda - seeded reduce on empty list returns the seed":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	clear {_empty::*}
+	assert ({_empty::*} reduced with {_add} from 42) is 42 with "empty reduce returns the seed"
+
+test "skLambda - max/min by returns the element with the largest/smallest key":
+	set {_abs} to lambda (n: number) -> number:
+		return abs({_n})
+	set {_signed::*} to -7, 3, and -1
+	assert (highest of {_signed::*} by {_abs}) is -7 with "abs(-7)=7 is the largest key"
+	assert (lowest of {_signed::*} by {_abs}) is -1 with "abs(-1)=1 is the smallest key"

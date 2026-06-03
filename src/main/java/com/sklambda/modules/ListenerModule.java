@@ -10,6 +10,7 @@ import com.sklambda.elements.effects.EffUnregisterListener;
 import com.sklambda.elements.expressions.ExprEndReason;
 import com.sklambda.elements.expressions.ExprListenerCountdown;
 import com.sklambda.elements.expressions.ExprListenerTriggers;
+import com.sklambda.elements.expressions.ExprListeners;
 import com.sklambda.elements.sections.SecListen;
 import com.sklambda.elements.types.EndReason;
 import com.sklambda.elements.types.Listener;
@@ -45,6 +46,7 @@ public final class ListenerModule implements AddonModule {
 		ExprListenerTriggers.register(registry);
 		ExprListenerCountdown.register(registry);
 		ExprEndReason.register(registry);
+		ExprListeners.register(registry);
 	}
 
 }
