@@ -2,6 +2,7 @@ package com.sklambda.elements.types;
 
 import ch.njol.skript.classes.ClassInfo;
 import ch.njol.skript.classes.Parser;
+import ch.njol.skript.lang.Expression;
 import ch.njol.skript.lang.ParseContext;
 import ch.njol.skript.registrations.Classes;
 import ch.njol.skript.variables.Variables;
@@ -14,7 +15,11 @@ import java.util.List;
 
 public final class Lambda {
 
-	public record Param(String name, ClassInfo<?> type) {}
+	public record Param(String name, ClassInfo<?> type, @Nullable Expression<?> defaultValue) {
+		public Param(String name, ClassInfo<?> type) {
+			this(name, type, null);
+		}
+	}
 
 	@FunctionalInterface
 	public interface Body {
@@ -52,9 +57,17 @@ public final class Lambda {
 		event.setArgs(args);
 		// Replay captured locals first, then bind params so they shadow same-named captures.
 		if (capturedLocals != null) Variables.setLocalVariables(event, capturedLocals);
-		int count = Math.min(args.length, params.size());
-		for (int i = 0; i < count; i++) {
-			Variables.setVariable(params.get(i).name(), args[i], event, true);
+		for (int i = 0; i < params.size(); i++) {
+			Param param = params.get(i);
+			Object value;
+			if (i < args.length) {
+				value = args[i];
+			} else if (param.defaultValue() != null) {
+				value = param.defaultValue().getSingle(event);
+			} else {
+				continue;
+			}
+			Variables.setVariable(param.name(), value, event, true);
 		}
 		return body.run(event);
 	}
@@ -90,7 +103,9 @@ public final class Lambda {
 			sb.append(" (");
 			for (int i = 0; i < params.size(); i++) {
 				if (i > 0) sb.append(", ");
-				sb.append(params.get(i).name()).append(": ").append(params.get(i).type().getCodeName());
+				Param param = params.get(i);
+				sb.append(param.name()).append(": ").append(param.type().getCodeName());
+				if (param.defaultValue() != null) sb.append(" = ").append(param.defaultValue().toString(null, false));
 			}
 			sb.append(")");
 		}

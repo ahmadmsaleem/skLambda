@@ -8,7 +8,9 @@ import com.sklambda.elements.effects.EffRegisterListener;
 import com.sklambda.elements.effects.EffSkipTrigger;
 import com.sklambda.elements.effects.EffUnregisterListener;
 import com.sklambda.elements.expressions.ExprEndReason;
+import com.sklambda.elements.expressions.ExprListenerCooldown;
 import com.sklambda.elements.expressions.ExprListenerCountdown;
+import com.sklambda.elements.expressions.ExprListenerOwner;
 import com.sklambda.elements.expressions.ExprListenerTriggers;
 import com.sklambda.elements.expressions.ExprListeners;
 import com.sklambda.elements.sections.SecListen;
@@ -45,6 +47,8 @@ public final class ListenerModule implements AddonModule {
 		CondListenerState.register(registry);
 		ExprListenerTriggers.register(registry);
 		ExprListenerCountdown.register(registry);
+		ExprListenerCooldown.register(registry);
+		ExprListenerOwner.register(registry);
 		ExprEndReason.register(registry);
 		ExprListeners.register(registry);
 	}

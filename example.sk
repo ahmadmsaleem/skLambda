@@ -361,7 +361,7 @@ command /endsession:
 # Uses: the `always()` / `never()` functions as drop-in predicates. They ignore their
 # arguments — `always()` always passes, `never()` never does — so they slot in anywhere a
 # predicate is expected: a `passes` gate, a feature flag you flip by swapping one line, or a
-# `filtered where` that keeps everything / nothing.
+# `where [...]` filter that keeps everything / nothing.
 command /gatecheck:
     trigger:
         set {_p} to sender
@@ -373,15 +373,15 @@ command /gatecheck:
             send "<red>gate closed" to {_p}
 
         # as a list filter: always() keeps every element, never() keeps none
-        set {_kept::*} to all players filtered where always() passes
-        set {_dropped::*} to all players filtered where never() passes
+        set {_kept::*} to all players where [always() passes]
+        set {_dropped::*} to all players where [never() passes]
         send "<gray>always() kept %size of {_kept::*}%, never() kept %size of {_dropped::*}%" to {_p}
 
 
-# Showcase 13: list operations — map / filter / reduce / sort / count / first
+# Showcase 13: list ops (map, reduce, sort) + core filter / count / first via predicates
 # Uses: the stored lambdas and predicates from the rest of this file, applied across a list so
 # the addon does the looping. Value-lambdas drive `mapped with` / `reduced with` / `sorted by`;
-# the predicates you already write drive `filtered where` / `count of ... where` / `first of ... where`.
+# your predicates drop into Skript's own `where [... passes for input]`, then count/first as usual.
 command /listops:
     trigger:
         set {_p} to sender
@@ -395,7 +395,7 @@ command /listops:
 
         # filter: keep only matching elements (a predicate -> shorter list)
         set {_big} to lambda (n: number): {_n} > 3
-        set {_kept::*} to {_nums::*} filtered where {_big} passes
+        set {_kept::*} to {_nums::*} where [{_big} passes for input]
         send "<aqua>over 3: %{_kept::*}%" to {_p}                # 5, 8
 
         # reduce: fold the whole list to one value (2-arg lambda: accumulator, next)
@@ -405,8 +405,8 @@ command /listops:
         send "<green>sum = %{_total}%" to {_p}                   # add(3,5)=8, add(8,2)=10, add(10,8)=18
 
         # count / first: same predicate, just the tally or the first hit
-        send "<aqua>%count of {_nums::*} where {_big} passes% numbers over 3" to {_p}
-        send "<aqua>first over 3: %first element of {_nums::*} where {_big} passes%" to {_p}
+        send "<aqua>%number of ({_nums::*} where [{_big} passes for input])% numbers over 3" to {_p}
+        send "<aqua>first over 3: %first element of ({_nums::*} where [{_big} passes for input])%" to {_p}
 
         # sort: order a list by a key the lambda pulls out of each element
         set {_score} to lambda (pl: player) -> number:
@@ -438,3 +438,29 @@ command /shieldbar:
                 send "<green>shield held for the full 30s" to {_p}
             on end:
                 send action bar "" to {_p}      # clear the bar however it ended
+
+
+# Showcase 15: new list & lambda tools (1.2.0)
+# Uses: default parameters, pipe, zipped, scanned, and paging (page / page count).
+command /toolbox:
+    trigger:
+        set {_p} to sender
+
+        # default parameters: leave a trailing arg off and its default fills in
+        set {_add} to lambda (a: number, b: number = 10) -> number:
+            return {_a} + {_b}
+        send "<aqua>add(5) = %call lambda {_add} with 5% (b defaulted to 10)" to {_p}
+
+        # pipe a value left-to-right through several lambdas
+        set {_double} to lambda (n: number) -> number:
+            return {_n} * 2
+        send "<aqua>piped: %pipe 5 through {_double}, {_double}%" to {_p}      # 20
+
+        # zip two lists with a combiner; scan keeps every running result
+        set {_sums::*} to (1, 2, 3) zipped with (10, 20, 30) using {_add}      # 11, 22, 33
+        set {_totals::*} to (3, 5, 2) scanned with {_add}                      # 3, 8, 10
+        send "<aqua>zipped %{_sums::*}% | scanned %{_totals::*}%" to {_p}
+
+        # page a list into rows of 3 (handy for paged GUIs)
+        set {_items::*} to 1, 2, 3, 4, 5, 6, and 7
+        send "<aqua>%page count of {_items::*} by 3% pages; page 1 = %page 1 of {_items::*} by 3%" to {_p}

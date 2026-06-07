@@ -23,24 +23,28 @@ import java.util.List;
 @Description({
 		"The listeners currently registered on the server, in creation order, the same set `/sklambda listeners` shows.",
 		"\t- `[all] active listeners` is every active listener, across all scripts.",
-		"\t- `listeners owned by %object%` is only those scoped to that owner (see the `owner:` entry on `listen`)."
+		"\t- `listeners owned by %object%` is only those scoped to that owner (see the `owner:` entry on `listen`).",
+		"\t- `the last created listener` is the single most recently created one that is still active, or nothing."
 })
 @Example("""
 		send "%size of all active listeners% listeners running" to console
 		loop listeners owned by player:
 			unregister loop-value
+		send "newest: %owner of the last created listener%" to console
 		""")
 @Since("1.1.0")
 public class ExprListeners extends SimpleExpression<Listener> {
 
 	private static final int OWNED = 1;
+	private static final int LAST = 2;
 
 	public static void register(@NotNull SyntaxRegistry registry) {
 		registry.register(SyntaxRegistry.EXPRESSION, DefaultSyntaxInfos.Expression.builder(ExprListeners.class, Listener.class)
 				.supplier(ExprListeners::new)
 				.addPatterns(
 						"[all] active listeners",
-						"[all] listeners owned by %object%")
+						"[all] listeners owned by %object%",
+						"[the] last [created] listener")
 				.build());
 	}
 
@@ -56,6 +60,10 @@ public class ExprListeners extends SimpleExpression<Listener> {
 
 	@Override
 	protected Listener @Nullable [] get(@NotNull Event event) {
+		if (mode == LAST) {
+			Listener last = ListenerRegistry.lastCreated();
+			return last == null ? new Listener[0] : new Listener[]{last};
+		}
 		List<Listener> active = ListenerRegistry.activeListeners();
 		if (mode == OWNED) {
 			Object owner = ownerExpr != null ? ownerExpr.getSingle(event) : null;
@@ -71,7 +79,7 @@ public class ExprListeners extends SimpleExpression<Listener> {
 
 	@Override
 	public boolean isSingle() {
-		return false;
+		return mode == LAST;
 	}
 
 	@Override
@@ -81,9 +89,11 @@ public class ExprListeners extends SimpleExpression<Listener> {
 
 	@Override
 	public @NotNull String toString(@Nullable Event event, boolean debug) {
-		return mode == OWNED
-				? "listeners owned by " + (ownerExpr != null ? ownerExpr.toString(event, debug) : "?")
-				: "all active listeners";
+		return switch (mode) {
+			case OWNED -> "listeners owned by " + (ownerExpr != null ? ownerExpr.toString(event, debug) : "?");
+			case LAST -> "the last created listener";
+			default -> "all active listeners";
+		};
 	}
 
 }

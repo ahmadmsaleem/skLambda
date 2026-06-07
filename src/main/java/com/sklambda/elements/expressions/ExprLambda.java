@@ -14,6 +14,7 @@ import ch.njol.skript.lang.SkriptParser.ParseResult;
 import ch.njol.skript.lang.TriggerItem;
 import ch.njol.skript.lang.parser.ParserInstance;
 import ch.njol.skript.lang.util.SimpleExpression;
+import ch.njol.skript.util.LiteralUtils;
 import ch.njol.skript.log.RetainingLogHandler;
 import ch.njol.skript.log.SkriptLogger;
 import ch.njol.skript.registrations.Classes;
@@ -34,6 +35,9 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 		"\t- a condition: the lambda returns whether it holds (a predicate, see `passes`),",
 		"\t- an effect: the lambda runs it and returns nothing, or",
 		"\t- a value: `return <expression>` (or just a bare expression) makes the lambda return that value.",
+		"",
+		"A parameter may declare a default with `name: type = value`, used when the caller leaves that "
+				+ "(trailing) argument off, e.g. `lambda (n: number = 1) -> number:`.",
 		"",
 		"Parameters become locals (`{_p}`) inside the body. The lambda also closes over the local "
 				+ "variables in scope where it is written, a snapshot taken when the expression is evaluated, "
@@ -89,7 +93,7 @@ public class ExprLambda extends SimpleExpression<Lambda> {
 			// An explicit `return <expression>` is a value lambda: evaluate it and hand the value back.
 			String returnExpr = stripLeadingReturn(bodyText);
 			if (returnExpr != null) {
-				Expression<?> value = new SkriptParser(returnExpr, SkriptParser.ALL_FLAGS).parseExpression(Object.class);
+				Expression<?> value = parseValue(returnExpr);
 				if (value == null) {
 					Skript.error("Can't understand the return value of this inline lambda: " + returnExpr);
 					return false;
@@ -111,7 +115,7 @@ public class ExprLambda extends SimpleExpression<Lambda> {
 						};
 					} else {
 						// Last resort: a bare expression body behaves like `return <expression>`.
-						Expression<?> value = new SkriptParser(bodyText, SkriptParser.ALL_FLAGS).parseExpression(Object.class);
+						Expression<?> value = parseValue(bodyText);
 						if (value == null) {
 							Skript.error("Can't understand this inline lambda body: " + bodyText
 									+ "; expected a condition, an effect, or a (return) value expression.");
@@ -163,6 +167,14 @@ public class ExprLambda extends SimpleExpression<Lambda> {
 		} finally {
 			log.stop();
 		}
+	}
+
+	/** Parses {@code text} as a value expression, converting any unparsed literal so it's safe to evaluate later, or null if it can't. */
+	private static @Nullable Expression<?> parseValue(String text) {
+		Expression<?> value = new SkriptParser(text, SkriptParser.ALL_FLAGS).parseExpression(Object.class);
+		if (value == null) return null;
+		value = LiteralUtils.defendExpression(value);
+		return LiteralUtils.canInitSafely(value) ? value : null;
 	}
 
 	/** A lambda body that evaluates {@code value} and returns it, cleaning up the invocation's locals. */
