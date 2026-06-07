@@ -52,7 +52,7 @@ public final class Listener implements org.bukkit.event.Listener {
 	private int targetTriggers;
 	private long initialTimeoutTicks;
 	private final long tickIntervalTicks;
-	private final long cooldownMs;
+	private long cooldownMs;
 
 	private @Nullable Object localsSnapshot;
 	private @Nullable Event lastFiredEvent;
@@ -416,6 +416,20 @@ public final class Listener implements org.bukkit.event.Listener {
 
 	public synchronized void setRemainingTriggers(int remaining) {
 		targetTriggers = currentTriggers + Math.max(0, remaining);
+	}
+
+	// ---- cooldown (debounce window) ----
+
+	public synchronized long getCooldownMillis() {
+		return cooldownMs;
+	}
+
+	public synchronized void setCooldownMillis(long ms) {
+		cooldownMs = Math.max(0, ms);
+	}
+
+	public synchronized void addCooldownMillis(long deltaMs) {
+		cooldownMs = Math.max(0, cooldownMs + deltaMs);
 	}
 
 	// ---- countdown (remaining time) ----

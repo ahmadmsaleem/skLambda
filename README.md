@@ -1,9 +1,5 @@
 ![Cover](https://cdn.modrinth.com/data/cached_images/32070cb0beb1772a327160cb7f52827138ae8c3b.png)
 
-## This addon is no longer maintained. As of 1.1.1, skLambda will not receive further updates. The source stays available, but there are no planned releases, fixes, or support going forward. Feel free to fork it.
-
-
-
 A Skript addon that adds two things:
 
 1. **Lambdas**: small functions you can save in a variable and run later.

@@ -68,6 +68,36 @@ test "skLambda - none of passes when no predicate passes":
 	assert none of {_checks::*} passes for 50 with "no predicate passes for 50"
 	assert none of {_checks::*} doesn't pass for 500 with "first predicate passes for 500, so none-of fails"
 
+test "skLambda - at least N of predicate list":
+	set {_a} to lambda (n: number): {_n} > 0
+	set {_b} to lambda (n: number): {_n} > 10
+	set {_c} to lambda (n: number): {_n} > 100
+	add {_a} to {_checks::*}
+	add {_b} to {_checks::*}
+	add {_c} to {_checks::*}
+	assert at least 2 of {_checks::*} passes for 50 with "50 passes the first two, so at least 2 holds"
+	assert at least 2 of {_checks::*} doesn't pass for 5 with "5 passes only the first, so at least 2 fails"
+
+test "skLambda - at most N of predicate list":
+	set {_a} to lambda (n: number): {_n} > 0
+	set {_b} to lambda (n: number): {_n} > 10
+	set {_c} to lambda (n: number): {_n} > 100
+	add {_a} to {_checks::*}
+	add {_b} to {_checks::*}
+	add {_c} to {_checks::*}
+	assert at most 1 of {_checks::*} passes for 5 with "5 passes only the first, so at most 1 holds"
+	assert at most 1 of {_checks::*} doesn't pass for 50 with "50 passes two, so at most 1 fails"
+
+test "skLambda - exactly N of predicate list":
+	set {_a} to lambda (n: number): {_n} > 0
+	set {_b} to lambda (n: number): {_n} > 10
+	set {_c} to lambda (n: number): {_n} > 100
+	add {_a} to {_checks::*}
+	add {_b} to {_checks::*}
+	add {_c} to {_checks::*}
+	assert exactly 2 of {_checks::*} passes for 50 with "50 passes exactly two"
+	assert exactly 2 of {_checks::*} doesn't pass for 500 with "500 passes all three, not exactly two"
+
 test "skLambda - leading not negates a predicate":
 	set {_p} to lambda (n: number): {_n} > 3
 	assert not {_p} passes for 2 with "2 > 3 is false, so 'not passes' holds"
@@ -115,11 +145,70 @@ test "skLambda - reduced with an explicit seed":
 	set {_nums::*} to 3, 5, and 2
 	assert ({_nums::*} reduced with {_add} from 100) is 110 with "100 + 3 + 5 + 2 = 110"
 
+test "skLambda - scanned keeps every running result":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_nums::*} to 3, 5, and 2
+	set {_totals::*} to {_nums::*} scanned with {_add}
+	assert {_totals::*} is 3, 8, and 10 with "running totals should be 3, 8, 10"
+
+test "skLambda - scanned with a seed emits the seed first":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_nums::*} to 3, 5, and 2
+	set {_totals::*} to {_nums::*} scanned with {_add} from 100
+	assert {_totals::*} is 100, 103, 108, and 110 with "seeded running totals should be 100, 103, 108, 110"
+
 test "skLambda - seeded reduce on empty list returns the seed":
 	set {_add} to lambda (a: number, b: number) -> number:
 		return {_a} + {_b}
 	clear {_empty::*}
 	assert ({_empty::*} reduced with {_add} from 42) is 42 with "empty reduce returns the seed"
+
+test "skLambda - default argument fills in a missing trailing arg":
+	set {_f} to lambda (a: number = 2, b: number = 3) -> number:
+		return {_a} + {_b}
+	assert (call {_f} with 2 and 3) is 5 with "both args given, expected 5"
+	assert (call {_f} with 10) is 13 with "b defaults to 3, expected 13"
+	assert (call {_f}) is 5 with "both default, expected 5"
+
+test "skLambda - single default argument":
+	set {_inc} to lambda (n: number = 1) -> number:
+		return {_n} + 1
+	assert (call {_inc}) is 2 with "n defaults to 1, expected 2"
+	assert (call {_inc} with 41) is 42 with "n given, expected 42"
+
+test "skLambda - pipe threads a value through a chain of lambdas":
+	set {_inc} to lambda (n: number) -> number:
+		return {_n} + 1
+	set {_double} to lambda (n: number) -> number:
+		return {_n} * 2
+	assert (pipe 5 through {_inc}, {_double}, and {_inc}) is 13 with "((5+1)*2)+1 = 13"
+
+test "skLambda - pipe with a single lambda":
+	set {_double} to lambda (n: number) -> number:
+		return {_n} * 2
+	assert (pipe 20 through {_double}) is 40 with "20 doubled is 40"
+
+test "skLambda - page splits a list into fixed-size chunks":
+	set {_items::*} to 1, 2, 3, 4, 5, 6, 7
+	assert (page 1 of {_items::*} by 3) is 1, 2, and 3 with "first page is 1, 2, 3"
+	assert (page 3 of {_items::*} by 3) is 7 with "last page is the partial 7"
+	assert (page 4 of {_items::*} by 3) is not set with "a page past the end is empty"
+
+test "skLambda - page count rounds up":
+	set {_items::*} to 1, 2, 3, 4, 5, 6, 7
+	assert (page count of {_items::*} by 3) is 3 with "7 items / 3 = 3 pages"
+
+test "skLambda - window slides one element at a time":
+	set {_items::*} to 1, 2, 3, 4
+	assert (window 1 of {_items::*} by 3) is 1, 2, and 3 with "first window is 1, 2, 3"
+	assert (window 2 of {_items::*} by 3) is 2, 3, and 4 with "second window is 2, 3, 4"
+	assert (window 3 of {_items::*} by 3) is not set with "no full window past the end"
+
+test "skLambda - window count is length minus size plus one":
+	set {_items::*} to 1, 2, 3, 4
+	assert (window count of {_items::*} by 3) is 2 with "4 - 3 + 1 = 2 windows"
 
 test "skLambda - max/min by returns the element with the largest/smallest key":
 	set {_abs} to lambda (n: number) -> number:

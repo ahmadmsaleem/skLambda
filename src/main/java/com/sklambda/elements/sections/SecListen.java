@@ -1,5 +1,6 @@
 package com.sklambda.elements.sections;
 
+import ch.njol.skript.ScriptLoader;
 import ch.njol.skript.Skript;
 import ch.njol.skript.classes.Changer.ChangeMode;
 import ch.njol.skript.config.Node;
@@ -200,7 +201,7 @@ public class SecListen extends EffectSection {
 		for (Node child : sectionNode) {
 			anyChild = true;
 			if (child instanceof SimpleNode) {
-				String text = child.getKey() == null ? "" : child.getKey();
+				String text = child.getKey() == null ? "" : ScriptLoader.replaceOptions(child.getKey());
 				int colon = text.indexOf(':');
 				if (colon < 0) {
 					Skript.error("Expected key: value entry or sub-section inside listen, got: " + text);
@@ -238,7 +239,7 @@ public class SecListen extends EffectSection {
 				String key = subNode.getKey() == null ? "" : subNode.getKey().trim().toLowerCase();
 				if (key.startsWith("every ")) {
 					if (tick != null) { Skript.error("Duplicate every <timespan>: block."); return false; }
-					String interval = subNode.getKey().trim().substring("every".length()).trim();
+					String interval = ScriptLoader.replaceOptions(subNode.getKey().trim().substring("every".length()).trim());
 					tickExpr = parseTimespan(interval);
 					if (tickExpr == null) return false;
 					tick = subNode;
@@ -253,7 +254,7 @@ public class SecListen extends EffectSection {
 									Skript.error("where: only accepts condition lines.");
 									return false;
 								}
-								String text = line.getKey() == null ? "" : line.getKey().trim();
+								String text = line.getKey() == null ? "" : ScriptLoader.replaceOptions(line.getKey()).trim();
 								if (text.isEmpty()) continue;
 								Condition c = Condition.parse(text, "Invalid where condition: " + text);
 								if (c == null) return false;

@@ -25,6 +25,8 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 				+ "`all of {checks::*} passes` mean the same thing.",
 		"\t`any of` passes if **at least one** predicate passes (OR semantics).",
 		"\t`none of` passes if **no** predicate passes.",
+		"\t`at least N of`, `at most N of`, and `exactly N of` pass when the number of passing predicates is "
+				+ "at least, at most, or exactly N.",
 		"",
 		"\tThe negated forms (`doesn't pass`, or a leading `not`) invert the result. A lambda that isn't a "
 				+ "predicate (doesn't return true) counts as not passing. An empty list never passes `all of`/`any of` "
@@ -44,6 +46,9 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 		if none of {is-banned::*} passes for {_p}:
 			send "welcome" to {_p}
 
+		if at least 2 of {requirements::*} passes for {_p}:
+			send "you qualify" to {_p}
+
 		if not {is-op} passes for {_p}:
 			send "not opped" to {_p}
 
@@ -55,7 +60,7 @@ public class CondPredicatePasses extends Condition {
 
 	private static final Object[] NO_ARGS = new Object[0];
 
-	private enum Quantifier { ALL, ANY, NONE }
+	private enum Quantifier { ALL, ANY, NONE, AT_LEAST, AT_MOST, EXACTLY }
 
 	public static void register(@NotNull SyntaxRegistry registry) {
 		registry.register(SyntaxRegistry.CONDITION, SyntaxInfo.builder(CondPredicatePasses.class)
@@ -63,26 +68,37 @@ public class CondPredicatePasses extends Condition {
 				.addPatterns(
 						"[not:not] [(all:all|any:any|none:none) of] %objects% pass[es] [for %-objects%]",
 						"[not:not] [(all:all|any:any|none:none) of] %objects% (match[es]|hold[s]) [for %-objects%]",
-						"[(all:all|any:any|none:none) of] %objects% (doesn't|does not|do not|don't) (pass|match|hold) [for %-objects%]")
+						"[(all:all|any:any|none:none) of] %objects% (doesn't|does not|do not|don't) (pass|match|hold) [for %-objects%]",
+						"[not:not] (atleast:at least|atmost:at most|exactly:exactly) %number% of %objects% pass[es] [for %-objects%]",
+						"[not:not] (atleast:at least|atmost:at most|exactly:exactly) %number% of %objects% (match[es]|hold[s]) [for %-objects%]",
+						"(atleast:at least|atmost:at most|exactly:exactly) %number% of %objects% (doesn't|does not|do not|don't) (pass|match|hold) [for %-objects%]")
 				.build());
 	}
 
 	private Expression<?> predicates;
 	private @Nullable Expression<?> argsExpr;
+	private @Nullable Expression<?> countExpr;
 	private Quantifier quantifier = Quantifier.ALL;
 
 	@Override
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
-		predicates = LiteralUtils.defendExpression(exprs[0]);
+		boolean counting = matchedPattern >= 3;
+		int predicateIndex = counting ? 1 : 0;
+		int argsIndex = counting ? 2 : 1;
+		if (counting) countExpr = exprs[0];
+		predicates = LiteralUtils.defendExpression(exprs[predicateIndex]);
 		if (!LiteralUtils.canInitSafely(predicates)) return false;
-		if (exprs[1] != null) {
-			argsExpr = LiteralUtils.defendExpression(exprs[1]);
+		if (exprs[argsIndex] != null) {
+			argsExpr = LiteralUtils.defendExpression(exprs[argsIndex]);
 			if (!LiteralUtils.canInitSafely(argsExpr)) return false;
 		}
-		if (parseResult.hasTag("any")) quantifier = Quantifier.ANY;
+		if (parseResult.hasTag("atleast")) quantifier = Quantifier.AT_LEAST;
+		else if (parseResult.hasTag("atmost")) quantifier = Quantifier.AT_MOST;
+		else if (parseResult.hasTag("exactly")) quantifier = Quantifier.EXACTLY;
+		else if (parseResult.hasTag("any")) quantifier = Quantifier.ANY;
 		else if (parseResult.hasTag("none")) quantifier = Quantifier.NONE;
 		else quantifier = Quantifier.ALL;
-		setNegated(matchedPattern == 2 || parseResult.hasTag("not"));
+		setNegated(matchedPattern == 2 || matchedPattern == 5 || parseResult.hasTag("not"));
 		return true;
 	}
 
@@ -90,10 +106,10 @@ public class CondPredicatePasses extends Condition {
 	public boolean check(@NotNull Event event) {
 		Object[] values = predicates.getArray(event);
 		Object[] args = argsExpr != null ? argsExpr.getArray(event) : NO_ARGS;
-		return evaluate(values, args) ^ isNegated();
+		return evaluate(values, args, event) ^ isNegated();
 	}
 
-	private boolean evaluate(Object[] values, Object[] args) {
+	private boolean evaluate(Object[] values, Object[] args, Event event) {
 		switch (quantifier) {
 			case ANY -> {
 				for (Object value : values) {
@@ -107,6 +123,13 @@ public class CondPredicatePasses extends Condition {
 				}
 				return true;
 			}
+			case AT_LEAST, AT_MOST, EXACTLY -> {
+				int n = count(event);
+				int passing = countPassing(values, args);
+				if (quantifier == Quantifier.AT_LEAST) return passing >= n;
+				if (quantifier == Quantifier.AT_MOST) return passing <= n;
+				return passing == n;
+			}
 			default -> {
 				if (values.length == 0) return false;
 				for (Object value : values) {
@@ -117,6 +140,19 @@ public class CondPredicatePasses extends Condition {
 		}
 	}
 
+	private int count(Event event) {
+		Object n = countExpr != null ? countExpr.getSingle(event) : null;
+		return n instanceof Number number ? number.intValue() : 0;
+	}
+
+	private static int countPassing(Object[] values, Object[] args) {
+		int passing = 0;
+		for (Object value : values) {
+			if (passes(value, args)) passing++;
+		}
+		return passing;
+	}
+
 	private static boolean passes(Object value, Object[] args) {
 		Lambda lambda = Lambda.from(value);
 		return lambda != null && Boolean.TRUE.equals(lambda.invoke(args));
@@ -124,10 +160,14 @@ public class CondPredicatePasses extends Condition {
 
 	@Override
 	public @NotNull String toString(@Nullable Event event, boolean debug) {
+		String count = countExpr != null ? countExpr.toString(event, debug) + " of " : "";
 		String quant = switch (quantifier) {
 			case ANY -> "any of ";
 			case NONE -> "none of ";
 			case ALL -> "all of ";
+			case AT_LEAST -> "at least " + count;
+			case AT_MOST -> "at most " + count;
+			case EXACTLY -> "exactly " + count;
 		};
 		return quant + predicates.toString(event, debug)
 				+ (isNegated() ? " doesn't pass" : " passes")

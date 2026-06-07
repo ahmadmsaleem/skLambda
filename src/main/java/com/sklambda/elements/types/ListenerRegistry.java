@@ -61,12 +61,29 @@ public final class ListenerRegistry {
 		return count;
 	}
 
-	/** Unregisters every active listener owned by {@code owner}; returns how many were stopped. */
 	public static int unregisterAllOwnedBy(@Nullable Object owner) {
 		if (owner == null || ACTIVE.isEmpty()) return 0;
 		int count = 0;
 		for (Listener listener : activeListeners()) {
 			if (listener.isOwnedBy(owner) && listener.unregister()) count++;
+		}
+		return count;
+	}
+
+	public static int pauseAllOwnedBy(@Nullable Object owner) {
+		if (owner == null || ACTIVE.isEmpty()) return 0;
+		int count = 0;
+		for (Listener listener : activeListeners()) {
+			if (listener.isOwnedBy(owner) && listener.pause()) count++;
+		}
+		return count;
+	}
+
+	public static int resumeAllOwnedBy(@Nullable Object owner) {
+		if (owner == null || ACTIVE.isEmpty()) return 0;
+		int count = 0;
+		for (Listener listener : activeListeners()) {
+			if (listener.isOwnedBy(owner) && listener.resume()) count++;
 		}
 		return count;
 	}
