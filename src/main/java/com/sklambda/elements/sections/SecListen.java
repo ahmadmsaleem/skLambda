@@ -25,10 +25,6 @@ import ch.njol.skript.variables.HintManager;
 import ch.njol.util.Kleenean;
 import com.sklambda.elements.events.ListenerDetachedEvent;
 import com.sklambda.elements.types.Listener;
-import org.bukkit.Chunk;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.World;
-import org.bukkit.entity.Entity;
 import org.bukkit.event.Event;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -43,7 +39,7 @@ import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-@Name("Listen Section")
+@Name("Listen Section (Listener)")
 @Description({
 		"Declarative event listener. Two forms are available:",
 		"\t`  - listen for event [where cond]:` registers immediately.",
@@ -69,7 +65,9 @@ import java.util.regex.Pattern;
 		"Expressions valid inside any callback:",
 		"\t`  - remaining triggers` reports the fires left before completion.",
 		"\t`  - remaining countdown` reports the time left before timeout.",
-		"\t`  - end reason` (inside `on end:`) is `completion`, `timeout`, `cancelled`, or `unregistered`."
+		"\t`  - end reason` (inside `on end:`) is `completion`, `timeout`, `cancelled`, or `unregistered`.",
+		"\t",
+		"Events that fire off the main thread (e.g. async chat) are supported, but their callbacks are run on the main thread the following tick, so they cannot cancel or modify the triggering event."
 })
 @Example("""
 		listen for block break where event-block is stone:
@@ -110,6 +108,15 @@ public class SecListen extends EffectSection {
 
 	public static boolean isInsideListenCallback() {
 		return INSIDE_LISTEN_CALLBACK.get() > 0;
+	}
+
+	/** Enter/leave a listen-callback parse scope so `end reason` and `remaining ...` resolve. Watchers reuse these. */
+	public static void pushListenCallback() {
+		INSIDE_LISTEN_CALLBACK.set(INSIDE_LISTEN_CALLBACK.get() + 1);
+	}
+
+	public static void popListenCallback() {
+		INSIDE_LISTEN_CALLBACK.set(INSIDE_LISTEN_CALLBACK.get() - 1);
 	}
 
 	public static void markSawComplete() {
@@ -173,9 +180,7 @@ public class SecListen extends EffectSection {
 		}
 		String eventPattern = full.trim();
 		eventLabel = eventPattern;
-		String fileName = sectionNode.getConfig().getFileName();
-		int slash = Math.max(fileName.lastIndexOf('/'), fileName.lastIndexOf('\\'));
-		sourceLocation = (slash >= 0 ? fileName.substring(slash + 1) : fileName) + ":" + sectionNode.getLine();
+		sourceLocation = SectionSupport.sourceLocation(sectionNode);
 
 		skriptEvent = SkriptEvent.parse(eventPattern, sectionNode, "Unrecognized event pattern: " + eventPattern);
 		if (skriptEvent == null) return false;
@@ -212,7 +217,7 @@ public class SecListen extends EffectSection {
 				switch (key) {
 					case "countdown" -> {
 						if (countdownExpr != null) { Skript.error("Duplicate countdown: entry."); return false; }
-						countdownExpr = parseTimespan(value);
+						countdownExpr = SectionSupport.parseTimespan(value);
 						if (countdownExpr == null) return false;
 					}
 					case "triggers" -> {
@@ -222,12 +227,12 @@ public class SecListen extends EffectSection {
 					}
 					case "owner" -> {
 						if (ownerExpr != null) { Skript.error("Duplicate owner: entry."); return false; }
-						ownerExpr = parseOwner(value);
+						ownerExpr = SectionSupport.parseOwner(value);
 						if (ownerExpr == null) return false;
 					}
 					case "cooldown" -> {
 						if (cooldownExpr != null) { Skript.error("Duplicate cooldown: entry."); return false; }
-						cooldownExpr = parseTimespan(value);
+						cooldownExpr = SectionSupport.parseTimespan(value);
 						if (cooldownExpr == null) return false;
 					}
 					default -> {
@@ -240,7 +245,7 @@ public class SecListen extends EffectSection {
 				if (key.startsWith("every ")) {
 					if (tick != null) { Skript.error("Duplicate every <timespan>: block."); return false; }
 					String interval = ScriptLoader.replaceOptions(subNode.getKey().trim().substring("every".length()).trim());
-					tickExpr = parseTimespan(interval);
+					tickExpr = SectionSupport.parseTimespan(interval);
 					if (tickExpr == null) return false;
 					tick = subNode;
 					continue;
@@ -401,16 +406,6 @@ public class SecListen extends EffectSection {
 	}
 
 	@SuppressWarnings("unchecked")
-	private static @Nullable Expression<? extends Timespan> parseTimespan(String text) {
-		Expression<?> e = new SkriptParser(text, SkriptParser.ALL_FLAGS).parseExpression(Timespan.class);
-		if (e == null) {
-			Skript.error("Expected a timespan (e.g. 30 seconds), got: " + text);
-			return null;
-		}
-		return (Expression<? extends Timespan>) e;
-	}
-
-	@SuppressWarnings("unchecked")
 	private static @Nullable Expression<? extends Number> parseNumber(String text) {
 		Expression<?> e = new SkriptParser(text, SkriptParser.ALL_FLAGS).parseExpression(Number.class);
 		if (e == null) {
@@ -418,16 +413,6 @@ public class SecListen extends EffectSection {
 			return null;
 		}
 		return (Expression<? extends Number>) e;
-	}
-
-	private static @Nullable Expression<?> parseOwner(String text) {
-		Expression<?> e = new SkriptParser(text, SkriptParser.ALL_FLAGS)
-				.parseExpression(OfflinePlayer.class, Entity.class, Chunk.class, World.class);
-		if (e == null) {
-			Skript.error("Expected an owner (an offline player, entity, chunk, or world) but got: " + text);
-			return null;
-		}
-		return e;
 	}
 
 	@Override
