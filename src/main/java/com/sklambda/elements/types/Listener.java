@@ -22,6 +22,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 public final class Listener implements org.bukkit.event.Listener {
 
@@ -30,7 +33,7 @@ public final class Listener implements org.bukkit.event.Listener {
 		return value instanceof Listener listener ? listener : null;
 	}
 
-	private final SkriptEvent skriptEvent;
+	private final @Nullable SkriptEvent skriptEvent;
 	private final Class<? extends Event>[] eventClasses;
 	private final List<Condition> filters;
 	private final @Nullable Trigger onTrigger;
@@ -41,6 +44,14 @@ public final class Listener implements org.bukkit.event.Listener {
 	private final @Nullable Trigger onPause;
 	private final @Nullable Trigger onResume;
 	private final @Nullable Trigger onRegister;
+	/** Optional one-shot continuation fired once at teardown with the final locals snapshot; used by `wait for next`. */
+	private final @Nullable Consumer<Object> onResolved;
+	/** Watcher mode: polled each tick to read the current value; `onChange` fires when it differs from the last. */
+	private final @Nullable Function<Event, Object> watchPoller;
+	private final @Nullable Trigger onChange;
+	/** Edge-triggered watcher: fired on a boolean false->true transition (`onRising`) or true->false (`onFalling`). */
+	private final @Nullable Trigger onRising;
+	private final @Nullable Trigger onFalling;
 
 	private final String sourceLocation;
 	private final String eventLabel;
@@ -48,6 +59,7 @@ public final class Listener implements org.bukkit.event.Listener {
 	final long creationId = ListenerRegistry.nextCreationId();
 	private long registeredAtMillis = -1;
 	private long lastWarnedAtMillis = -1;
+	private boolean warnedAsync;
 
 	private int targetTriggers;
 	private long initialTimeoutTicks;
@@ -68,6 +80,10 @@ public final class Listener implements org.bukkit.event.Listener {
 	private boolean shouldCancel;
 	private boolean finished;
 	private @Nullable EndReason lastEndReason;
+	private boolean hasWatchValue;
+	private @Nullable Object lastWatchValue;
+	private @Nullable Object watchOld;
+	private @Nullable Object watchNew;
 
 	private Listener(Builder builder) {
 		this.skriptEvent = builder.skriptEvent;
@@ -81,6 +97,11 @@ public final class Listener implements org.bukkit.event.Listener {
 		this.onPause = builder.onPause;
 		this.onResume = builder.onResume;
 		this.onRegister = builder.onRegister;
+		this.onResolved = builder.onResolved;
+		this.watchPoller = builder.watchPoller;
+		this.onChange = builder.onChange;
+		this.onRising = builder.onRising;
+		this.onFalling = builder.onFalling;
 		this.targetTriggers = builder.targetTriggers;
 		this.initialTimeoutTicks = builder.timeoutTicks;
 		this.tickIntervalTicks = builder.tickIntervalTicks;
@@ -90,12 +111,12 @@ public final class Listener implements org.bukkit.event.Listener {
 		this.owner = builder.owner;
 	}
 
-	public static Builder builder(SkriptEvent skriptEvent, Class<? extends Event>[] eventClasses) {
+	public static Builder builder(@Nullable SkriptEvent skriptEvent, Class<? extends Event>[] eventClasses) {
 		return new Builder(skriptEvent, eventClasses);
 	}
 
 	public static final class Builder {
-		private final SkriptEvent skriptEvent;
+		private final @Nullable SkriptEvent skriptEvent;
 		private final Class<? extends Event>[] eventClasses;
 		private List<Condition> filters = Collections.emptyList();
 		private @Nullable Trigger onTrigger;
@@ -106,6 +127,11 @@ public final class Listener implements org.bukkit.event.Listener {
 		private @Nullable Trigger onPause;
 		private @Nullable Trigger onResume;
 		private @Nullable Trigger onRegister;
+		private @Nullable Consumer<Object> onResolved;
+		private @Nullable Function<Event, Object> watchPoller;
+		private @Nullable Trigger onChange;
+		private @Nullable Trigger onRising;
+		private @Nullable Trigger onFalling;
 		private int targetTriggers;
 		private long timeoutTicks = -1;
 		private long tickIntervalTicks;
@@ -114,7 +140,7 @@ public final class Listener implements org.bukkit.event.Listener {
 		private String eventLabel = "";
 		private @Nullable Object owner;
 
-		private Builder(SkriptEvent skriptEvent, Class<? extends Event>[] eventClasses) {
+		private Builder(@Nullable SkriptEvent skriptEvent, Class<? extends Event>[] eventClasses) {
 			this.skriptEvent = skriptEvent;
 			this.eventClasses = eventClasses;
 		}
@@ -128,6 +154,11 @@ public final class Listener implements org.bukkit.event.Listener {
 		public Builder onPause(@Nullable Trigger onPause) { this.onPause = onPause; return this; }
 		public Builder onResume(@Nullable Trigger onResume) { this.onResume = onResume; return this; }
 		public Builder onRegister(@Nullable Trigger onRegister) { this.onRegister = onRegister; return this; }
+		public Builder onResolved(@Nullable Consumer<Object> onResolved) { this.onResolved = onResolved; return this; }
+		public Builder watchPoller(@Nullable Function<Event, Object> watchPoller) { this.watchPoller = watchPoller; return this; }
+		public Builder onChange(@Nullable Trigger onChange) { this.onChange = onChange; return this; }
+		public Builder onRising(@Nullable Trigger onRising) { this.onRising = onRising; return this; }
+		public Builder onFalling(@Nullable Trigger onFalling) { this.onFalling = onFalling; return this; }
 		public Builder triggers(int targetTriggers) { this.targetTriggers = targetTriggers; return this; }
 		public Builder timeoutTicks(long timeoutTicks) { this.timeoutTicks = timeoutTicks; return this; }
 		public Builder tickIntervalTicks(long tickIntervalTicks) { this.tickIntervalTicks = tickIntervalTicks; return this; }
@@ -201,6 +232,7 @@ public final class Listener implements org.bukkit.event.Listener {
 		lastFiredEvent = null;
 		registeredAtMillis = System.currentTimeMillis();
 		lastWarnedAtMillis = -1;
+		warnedAsync = false;
 		ListenerRegistry.add(this);
 		EventExecutor executor = (lst, evt) -> handle(evt);
 		for (Class<? extends Event> eventClass : eventClasses) {
@@ -209,7 +241,7 @@ public final class Listener implements org.bukkit.event.Listener {
 		if (initialTimeoutTicks > 0) {
 			scheduleTimeout(initialTimeoutTicks);
 		}
-		if (onTick != null && tickIntervalTicks > 0) {
+		if ((onTick != null || watchPoller != null) && tickIntervalTicks > 0) {
 			tickTask = Bukkit.getScheduler().runTaskTimer(plugin, this::fireTick, tickIntervalTicks, tickIntervalTicks);
 		}
 		if (onRegister != null) {
@@ -265,8 +297,33 @@ public final class Listener implements org.bukkit.event.Listener {
 		return true;
 	}
 
-	private synchronized void handle(Event event) {
-		if (!active || paused || !skriptEvent.check(event)) return;
+	private void handle(Event event) {
+		if (Bukkit.isPrimaryThread()) {
+			handleSync(event);
+			return;
+		}
+		// The event fired off the main thread. Marshal the listener body onto the main thread so
+		// user callbacks run where Skript expects them (matching vanilla Skript). The triggering
+		// event has already dispatched by the time we run next tick, so the body can't cancel or
+		// modify it.
+		Plugin plugin = SkLambda.getInstance();
+		if (plugin == null) return;
+		warnAsyncOnce();
+		Bukkit.getScheduler().runTask(plugin, () -> handleSync(event));
+	}
+
+	private synchronized void warnAsyncOnce() {
+		if (warnedAsync) return;
+		warnedAsync = true;
+		Plugin plugin = SkLambda.getInstance();
+		if (plugin == null) return;
+		plugin.getLogger().warning("Listener at " + sourceLocation + " for '" + eventLabel
+				+ "' is handling an event that fires off the main thread; its callbacks run on the"
+				+ " main thread the following tick and cannot cancel or modify that event.");
+	}
+
+	private synchronized void handleSync(Event event) {
+		if (!active || paused || skriptEvent == null || !skriptEvent.check(event)) return;
 		Object preexisting = enterScope(event);
 		boolean skipped;
 		try {
@@ -320,8 +377,55 @@ public final class Listener implements org.bukkit.event.Listener {
 	}
 
 	private synchronized void fireTick() {
-		if (!active || paused || onTick == null) return;
-		runWith(onTick, callbackEvent());
+		if (!active || paused) return;
+		if (watchPoller != null) {
+			pollAndMaybeFire();
+			return;
+		}
+		if (onTick != null) runWith(onTick, callbackEvent());
+	}
+
+	/** Watcher tick: re-read the watched value; if it changed since last poll, run `onChange` with old/new bound. */
+	private void pollAndMaybeFire() {
+		Event event = callbackEvent();
+		Object current;
+		Object preexisting = enterScope(event);
+		try {
+			current = watchPoller.apply(event);
+			captureSnapshot(event);
+		} finally {
+			exitScope(event, preexisting);
+		}
+		if (!hasWatchValue) {
+			// First poll establishes the baseline; a change needs a prior value to compare against.
+			hasWatchValue = true;
+			lastWatchValue = current;
+			return;
+		}
+		if (Objects.equals(current, lastWatchValue)) return;
+		watchOld = lastWatchValue;
+		watchNew = current;
+		lastWatchValue = current;
+		if (onChange != null) runWith(onChange, event);
+		// Edge-triggered: a boolean transition fires rising (false->true) or falling (true->false).
+		boolean wasTrue = Boolean.TRUE.equals(watchOld);
+		boolean isTrue = Boolean.TRUE.equals(watchNew);
+		if (isTrue && !wasTrue) {
+			if (onRising != null) runWith(onRising, event);
+		} else if (wasTrue && !isTrue) {
+			if (onFalling != null) runWith(onFalling, event);
+		}
+		if (shouldCancel) teardown(EndReason.CANCELLED);
+	}
+
+	/** The value before the most recent change, readable as `old value` inside `on change`. */
+	public synchronized @Nullable Object getWatchOld() {
+		return watchOld;
+	}
+
+	/** The value after the most recent change, readable as `new value` inside `on change`. */
+	public synchronized @Nullable Object getWatchNew() {
+		return watchNew;
 	}
 
 	/**
@@ -392,6 +496,8 @@ public final class Listener implements org.bukkit.event.Listener {
 		}
 		paused = false;
 		pausedRemainingMs = -1;
+		// Resume any awaiting trigger last, after callbacks have settled the locals snapshot.
+		if (onResolved != null) onResolved.accept(localsSnapshot);
 	}
 
 	private void scheduleTimeout(long ticks) {
@@ -484,7 +590,9 @@ public final class Listener implements org.bukkit.event.Listener {
 
 	@Override
 	public String toString() {
-		return "listener for " + skriptEvent + (active ? " (active)" : " (inactive)");
+		String subject = watchPoller != null ? "watcher" + (eventLabel.isEmpty() ? "" : " on " + eventLabel)
+				: "listener for " + skriptEvent;
+		return subject + (active ? " (active)" : " (inactive)");
 	}
 
 	public static void registerType() {

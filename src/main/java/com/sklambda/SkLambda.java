@@ -5,6 +5,7 @@ import org.bstats.bukkit.Metrics;
 import ch.njol.skript.util.Timespan;
 import ch.njol.skript.util.Timespan.TimePeriod;
 import ch.njol.skript.util.Version;
+import com.sklambda.elements.types.Future;
 import com.sklambda.elements.types.ListenerRegistry;
 import com.sklambda.elements.types.OwnerCleanup;
 import com.sklambda.modules.LambdaModule;
@@ -79,6 +80,11 @@ public class SkLambda extends JavaPlugin {
 		}
 
 		if (updateNotifications) new UpdateChecker(this);
+	}
+
+	@Override
+	public void onDisable() {
+		Future.shutdownPool();
 	}
 
 	/**

@@ -1,13 +1,18 @@
 package com.sklambda.modules;
 
+import com.sklambda.elements.conditions.CondFutureState;
 import com.sklambda.elements.conditions.CondPredicatePasses;
+import com.sklambda.elements.effects.EffCompleteFuture;
 import com.sklambda.elements.effects.EffRunLambda;
 import com.sklambda.elements.expressions.ExprBoundLambda;
 import com.sklambda.elements.expressions.ExprCallLambda;
 import com.sklambda.elements.expressions.ExprFunctionLambda;
+import com.sklambda.elements.expressions.ExprFutureOfLambda;
+import com.sklambda.elements.expressions.ExprFutureResult;
 import com.sklambda.elements.expressions.ExprLambda;
 import com.sklambda.elements.expressions.ExprMapped;
 import com.sklambda.elements.expressions.ExprMinMaxBy;
+import com.sklambda.elements.expressions.ExprNewFuture;
 import com.sklambda.elements.expressions.ExprPageCount;
 import com.sklambda.elements.expressions.ExprPaged;
 import com.sklambda.elements.expressions.ExprPiped;
@@ -17,7 +22,9 @@ import com.sklambda.elements.expressions.ExprScanned;
 import com.sklambda.elements.expressions.ExprSorted;
 import com.sklambda.elements.expressions.ExprZipped;
 import com.sklambda.elements.functions.ConstantPredicateFunctions;
+import com.sklambda.elements.sections.SecAwaitFuture;
 import com.sklambda.elements.sections.SecLambdaDefine;
+import com.sklambda.elements.types.Future;
 import com.sklambda.elements.types.Lambda;
 import org.jetbrains.annotations.NotNull;
 import org.skriptlang.skript.addon.AddonModule;
@@ -35,6 +42,7 @@ public final class LambdaModule implements AddonModule {
 	@Override
 	public void init(@NotNull SkriptAddon addon) {
 		Lambda.register();
+		Future.registerType();
 	}
 
 	@Override
@@ -58,6 +66,12 @@ public final class LambdaModule implements AddonModule {
 		ExprBoundLambda.register(registry);
 		ExprNegatedLambda.register(registry);
 		ConstantPredicateFunctions.register(addon);
+		ExprNewFuture.register(registry);
+		ExprFutureOfLambda.register(registry);
+		ExprFutureResult.register(registry);
+		EffCompleteFuture.register(registry);
+		CondFutureState.register(registry);
+		SecAwaitFuture.register(registry);
 	}
 
 }

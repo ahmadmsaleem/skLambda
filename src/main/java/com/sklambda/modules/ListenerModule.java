@@ -13,7 +13,11 @@ import com.sklambda.elements.expressions.ExprListenerCountdown;
 import com.sklambda.elements.expressions.ExprListenerOwner;
 import com.sklambda.elements.expressions.ExprListenerTriggers;
 import com.sklambda.elements.expressions.ExprListeners;
+import com.sklambda.elements.expressions.ExprWatchValue;
+import com.sklambda.elements.sections.SecAwait;
 import com.sklambda.elements.sections.SecListen;
+import com.sklambda.elements.sections.SecWatch;
+import com.sklambda.elements.sections.SecWatchCondition;
 import com.sklambda.elements.types.EndReason;
 import com.sklambda.elements.types.Listener;
 import org.jetbrains.annotations.NotNull;
@@ -38,6 +42,10 @@ public final class ListenerModule implements AddonModule {
 	public void load(@NotNull SkriptAddon addon) {
 		SyntaxRegistry registry = addon.syntaxRegistry();
 		SecListen.register(registry);
+		SecAwait.register(registry);
+		SecWatch.register(registry);
+		SecWatchCondition.register(registry);
+		ExprWatchValue.register(registry);
 		EffCancelListener.register(registry);
 		EffRegisterListener.register(registry);
 		EffUnregisterListener.register(registry);
