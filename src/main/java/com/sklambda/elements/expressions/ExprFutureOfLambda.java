@@ -10,6 +10,7 @@ import ch.njol.skript.lang.util.SimpleExpression;
 import ch.njol.skript.util.LiteralUtils;
 import ch.njol.util.Kleenean;
 import com.sklambda.elements.types.Future;
+import com.sklambda.elements.types.FutureRegistry;
 import com.sklambda.elements.types.Lambda;
 import org.bukkit.event.Event;
 import org.jetbrains.annotations.NotNull;
@@ -23,11 +24,13 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 		"\tWARNING: the lambda runs on a background thread, so its body MUST be thread-safe: pure computation or I/O only, "
 				+ "with no Bukkit API (no blocks, entities, inventories, players, or other server state). Touching the server "
 				+ "from a background thread will throw or corrupt state. Arguments are evaluated on the main thread before the lambda starts.",
-		"\tAwait the result with `wait for %future%`, which suspends the trigger without blocking the server."
+		"\tAwait the result with `wait for %future%`, which suspends the trigger without blocking the server.",
+		"\tIf the lambda body errors, the future FAILS rather than resolving to nothing: `wait for` routes to "
+				+ "`on failure:`, `%future% has failed` is true, and `failure reason of %future%` explains why."
 })
 @Example("""
 		set {_hash} to lambda (text: string) -> string:
-			return sha256 of {_text}
+			return {_text} hashed with SHA-256
 		set {_f} to future of calling lambda {_hash} with "payload"
 		wait for {_f} for at most 5 seconds:
 			send "hash: %result of {_f}%"
@@ -47,8 +50,11 @@ public class ExprFutureOfLambda extends SimpleExpression<Future> {
 	private Expression<?> lambdaExpr;
 	private @Nullable Expression<?> argsExpr;
 
+	private String origin = "unknown";
+
 	@Override
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
+		origin = FutureRegistry.currentOrigin();
 		lambdaExpr = exprs[0];
 		if (exprs[1] != null) {
 			argsExpr = LiteralUtils.defendExpression(exprs[1]);
@@ -63,7 +69,7 @@ public class ExprFutureOfLambda extends SimpleExpression<Future> {
 		if (lambda == null) return null;
 		// Evaluate args on the main thread, then hand the resolved values to the background invocation.
 		Object[] args = argsExpr != null ? argsExpr.getArray(event) : new Object[0];
-		return new Future[]{Future.ofLambda(lambda, args)};
+		return new Future[]{Future.ofLambda(lambda, args).origin(origin)};
 	}
 
 	@Override

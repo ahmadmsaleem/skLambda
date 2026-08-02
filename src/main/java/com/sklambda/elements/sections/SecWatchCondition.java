@@ -37,7 +37,8 @@ import java.util.regex.Pattern;
 @Description({
 		"Edge-triggered condition watcher: polls a condition on a timer and fires on the transition, not on every poll.",
 		"\t`watch when <condition> every %timespan%:` with `on rising:` (the moment it goes false -> true) and/or `on falling:` (true -> false).",
-		"\tThis is \"do X the moment Y first becomes true\" without writing a poll loop. The condition's state at the first poll is the baseline, so a transition is needed to fire (a condition already true at the start won't fire `on rising` until it goes false then true again).",
+		"\tThis is \"do X the moment Y first becomes true\" without writing a poll loop. By default the condition's state at the first poll is the baseline, so a transition is needed to fire: a condition ALREADY true at the start won't fire `on rising` until it goes false then true again.",
+		"\tOptional entry: `initial: %boolean%` declares the state to assume before the first poll, which removes that trap. `initial: false` makes an already-true condition fire `on rising:` on the very first poll; `initial: true` does the same for `on falling:`. Omit it for the baseline behaviour above.",
 		"\tOptional entry: `owner: %offlineplayer/entity/chunk/world%` auto-stops the watcher when the owner goes away.",
 		"\tOptional blocks: `on timeout:` (needs `within %timespan%`) and `on end:`.",
 		"\tThe result is a normal listener handle: `pause`, `resume`, `unregister`, `is registered`, and `/sklambda listeners` all work. The condition is checked on the main thread."
@@ -49,6 +50,13 @@ import java.util.regex.Pattern;
 				send "<red>low health!" to {_p}
 			on falling:
 				send "<green>back to safe health" to {_p}
+		""")
+@Example("""
+		# initial: false assumes it started false, so an already-hurt player fires straight away
+		watch when (health of {_p} < 6) every 1 second:
+			initial: false
+			on rising:
+				send "<red>low health!" to {_p}
 		""")
 @Since("1.3.0")
 public class SecWatchCondition extends EffectSection {
@@ -72,6 +80,7 @@ public class SecWatchCondition extends EffectSection {
 	private Expression<? extends Timespan> intervalExpr;
 	private @Nullable Expression<? extends Timespan> timeoutExpr;
 	private @Nullable Expression<?> ownerExpr;
+	private @Nullable Expression<? extends Boolean> initialExpr;
 	private String sourceLocation = "unknown";
 	private String conditionLabel = "condition";
 	private @Nullable Trigger onRising;
@@ -147,8 +156,12 @@ public class SecWatchCondition extends EffectSection {
 					if (ownerExpr != null) { Skript.error("Duplicate owner: entry."); return false; }
 					ownerExpr = SectionSupport.parseOwner(value);
 					if (ownerExpr == null) return false;
+				} else if (key.equals("initial")) {
+					if (initialExpr != null) { Skript.error("Duplicate initial: entry."); return false; }
+					initialExpr = SectionSupport.parseBoolean(value);
+					if (initialExpr == null) return false;
 				} else {
-					Skript.error("Unknown entry " + key + ": inside watch, expected owner:.");
+					Skript.error("Unknown entry " + key + ": inside watch, expected owner: or initial:.");
 					return false;
 				}
 			} else if (child instanceof SectionNode subNode) {
@@ -231,6 +244,7 @@ public class SecWatchCondition extends EffectSection {
 		}
 
 		Object owner = ownerExpr != null ? ownerExpr.getSingle(event) : null;
+		Boolean initial = initialExpr != null ? initialExpr.getSingle(event) : null;
 
 		@SuppressWarnings("unchecked")
 		Class<? extends Event>[] noEvents = (Class<? extends Event>[]) new Class<?>[0];
@@ -238,6 +252,7 @@ public class SecWatchCondition extends EffectSection {
 				.watchPoller(poller)
 				.onRising(onRising)
 				.onFalling(onFalling)
+				.initialWatchValue(initial)
 				.onTimeout(onTimeout)
 				.onEnd(onEnd)
 				.owner(owner)

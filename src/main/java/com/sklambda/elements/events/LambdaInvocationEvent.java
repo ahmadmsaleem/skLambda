@@ -11,6 +11,19 @@ public final class LambdaInvocationEvent extends Event {
 
 	private @Nullable Object returnValue;
 	private Object @NotNull [] args = new Object[0];
+	private boolean errored;
+
+	/**
+	 * Whether the body errored out. Skript catches runtime errors inside a trigger, logs them, and reports
+	 * failure only through {@code Trigger.execute}'s return value, so bodies record it here for the caller.
+	 */
+	public boolean hasErrored() {
+		return errored;
+	}
+
+	public void markErrored() {
+		this.errored = true;
+	}
 
 	public @Nullable Object getReturnValue() {
 		return returnValue;

@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Name("Await Future")
 @Description({
@@ -39,7 +40,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 		"\t`wait for %future% [(within|for at most) %timespan%]:` waits for a single future.",
 		"\t`wait for all of %futures% [...]:` waits until every future resolves (when-all).",
 		"\t`wait for any of %futures% [...]:` waits until the first one resolves (when-any).",
-		"\tThe section body runs once the wait resolves; read values with `result of %future%` (the future is resolved by then). An optional `on timeout:` block, nested inside, runs instead if the timeout elapses. Locals set in either branch carry forward to the code after the block."
+		"\tThe section body runs once the wait resolves; read values with `result of %future%` (the future is resolved by then). Optional `on failure:` and `on timeout:` blocks, nested inside alongside the body, run instead if a future fails or the timeout elapses. Locals set in whichever branch runs carry forward to the code after the block.",
+		"\t`on failure:` fires when `wait for all of` sees its FIRST failure (it short-circuits), or when every future given to `wait for any of` has failed. Read why with `failure reason of %future%`.",
+		"\tWithout an `on failure:` block a failure falls through to the main body, where `result of` reads as nothing."
 })
 @Example("""
 		set {_f} to future of calling lambda {_slow} with {_p}
@@ -47,8 +50,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 		wait for {_f} for at most 5 seconds:
 			set {_r} to result of {_f}
 			send "got %{_r}%" to {_p}
-		on timeout:
-			send "timed out" to {_p}
+			on failure:
+				send "failed: %failure reason of {_f}%" to {_p}
+			on timeout:
+				send "timed out" to {_p}
 		""")
 @Since("1.3.0")
 public class SecAwaitFuture extends EffectSection {
@@ -56,20 +61,25 @@ public class SecAwaitFuture extends EffectSection {
 	public static void register(@NotNull SyntaxRegistry registry) {
 		registry.register(SyntaxRegistry.SECTION, SyntaxInfo.builder(SecAwaitFuture.class)
 				.supplier(SecAwaitFuture::new)
-				.addPatterns(
-						"wait for %future% [(within|for at most|for up to) %-timespan%]",
-						"wait for (all|every|both) of %futures% [(within|for at most|for up to) %-timespan%]",
-						"wait for any of %futures% [(within|for at most|for up to) %-timespan%]")
+				// One pattern with a parse tag, not three: with separate patterns the singular
+				// `%future%` form can shadow the `any of` form, and the branch then silently
+				// falls back to all-of semantics.
+				.addPatterns("wait for [(all|every|both|any:any) of] %futures% "
+						+ "[(within|for at most|for up to) %-timespan%]")
 				.build());
 	}
 
-	private static final int ANY = 2;
+	/** Which branch a settled wait routes to. */
+	private static final int RESOLVED = 0;
+	private static final int FAILED = 1;
+	private static final int TIMED_OUT = 2;
 
 	private Expression<?> futuresExpr;
 	private @Nullable Expression<? extends Timespan> timeoutExpr;
 	private boolean any;
 	private @Nullable Trigger receivedTrigger;
 	private @Nullable Trigger timeoutTrigger;
+	private @Nullable Trigger failureTrigger;
 
 	@Override
 	@SuppressWarnings("unchecked")
@@ -82,10 +92,11 @@ public class SecAwaitFuture extends EffectSection {
 		}
 		futuresExpr = exprs[0];
 		timeoutExpr = (Expression<? extends Timespan>) exprs[1];
-		any = matchedPattern == ANY;
+		any = parseResult.hasTag("any");
 
-		// Split an optional `on timeout:` child out of the body; everything else is the received handler.
+		// Split the optional `on failure:` / `on timeout:` children out; everything else is the received handler.
 		SectionNode timeoutNode = null;
+		SectionNode failureNode = null;
 		for (Node child : sectionNode) {
 			if (child instanceof SectionNode subNode) {
 				String key = subNode.getKey() == null ? "" : subNode.getKey().trim().toLowerCase();
@@ -95,6 +106,12 @@ public class SecAwaitFuture extends EffectSection {
 						return false;
 					}
 					timeoutNode = subNode;
+				} else if (key.equals("on failure")) {
+					if (failureNode != null) {
+						Skript.error("Duplicate `on failure` block.");
+						return false;
+					}
+					failureNode = subNode;
 				}
 			}
 		}
@@ -103,6 +120,7 @@ public class SecAwaitFuture extends EffectSection {
 			return false;
 		}
 		if (timeoutNode != null) timeoutNode.remove();
+		if (failureNode != null) failureNode.remove();
 
 		ParserInstance parser = getParser();
 		Class<? extends Event>[] outerEvents = parser.getCurrentEvents();
@@ -114,6 +132,10 @@ public class SecAwaitFuture extends EffectSection {
 		if (timeoutNode != null) {
 			timeoutTrigger = loadCode(timeoutNode, "wait timeout", bodyEvents);
 			if (timeoutTrigger == null) return false;
+		}
+		if (failureNode != null) {
+			failureTrigger = loadCode(failureNode, "wait failure", bodyEvents);
+			if (failureTrigger == null) return false;
 		}
 
 		// Code after this block runs only once the wait resolves, so mark it delayed.
@@ -130,9 +152,14 @@ public class SecAwaitFuture extends EffectSection {
 		if (plugin == null) return next;
 
 		List<CompletableFuture<Object>> raws = new ArrayList<>();
+		List<Future> awaited = new ArrayList<>();
 		for (Object value : futuresExpr.getArray(event)) {
 			Future future = Future.from(value);
-			if (future != null) raws.add(future.raw());
+			if (future != null) {
+				raws.add(future.raw());
+				awaited.add(future);
+				future.awaitStarted();
+			}
 		}
 
 		long timeoutTicks = -1;
@@ -150,30 +177,67 @@ public class SecAwaitFuture extends EffectSection {
 		if (raws.isEmpty()) {
 			gate = CompletableFuture.completedFuture(null);
 		} else if (any) {
-			gate = CompletableFuture.anyOf(raws.toArray(new CompletableFuture[0]));
+			// anyOf settles on the first future to finish either way; we want the first SUCCESS,
+			// and a failure only once every one of them has failed. Outcomes are recorded per
+			// future rather than counted down, so a duplicate future in the list (or a callback
+			// running more than once) can never fake "everything failed".
+			CompletableFuture<Object> race = new CompletableFuture<>();
+			AtomicReference<Throwable> lastError = new AtomicReference<>();
+			List<CompletableFuture<Boolean>> outcomes = new ArrayList<>();
+			for (CompletableFuture<Object> raw : raws) {
+				// handle() never fails, so allOf below settles once every future has settled.
+				outcomes.add(raw.handle((value, error) -> {
+					if (error == null) {
+						race.complete(value);
+						return true;
+					}
+					lastError.set(error);
+					return false;
+				}));
+			}
+			CompletableFuture.allOf(outcomes.toArray(new CompletableFuture[0])).thenRun(() -> {
+				for (CompletableFuture<Boolean> outcome : outcomes) {
+					if (Boolean.TRUE.equals(outcome.getNow(Boolean.FALSE))) return;
+				}
+				Throwable error = lastError.get();
+				race.completeExceptionally(error != null ? error
+						: new IllegalStateException("every future failed"));
+			});
+			gate = race;
 		} else {
+			// allOf already short-circuits: it settles exceptionally on the first failure.
 			gate = CompletableFuture.allOf(raws.toArray(new CompletableFuture[0]));
 		}
 
+		// Release the awaiting count however this wait ends, so /sklambda futures stays accurate.
+		Runnable release = () -> awaited.forEach(Future::awaitEnded);
 		if (timeoutTicks > 0) {
 			timeoutHolder[0] = Bukkit.getScheduler().runTaskLater(plugin,
-					() -> finish(true, next, event, localVars, resolved, timeoutHolder, plugin), timeoutTicks);
+					() -> { release.run(); finish(TIMED_OUT, next, event, localVars, resolved, timeoutHolder, plugin); }, timeoutTicks);
 		}
-		gate.whenComplete((result, error) -> finish(false, next, event, localVars, resolved, timeoutHolder, plugin));
+		gate.whenComplete((result, error) -> {
+			release.run();
+			finish(error != null ? FAILED : RESOLVED, next, event, localVars, resolved, timeoutHolder, plugin);
+		});
 
 		// Suspend; finish() resumes the trigger when the wait resolves or times out.
 		return null;
 	}
 
 	/** Resumes the suspended trigger once, on the main thread, replaying its locals and running the matching branch. */
-	private void finish(boolean timedOut, @Nullable TriggerItem next, @NotNull Event event, @Nullable Object localVars,
+	private void finish(int outcome, @Nullable TriggerItem next, @NotNull Event event, @Nullable Object localVars,
 						@NotNull AtomicBoolean resolved, @NotNull BukkitTask[] timeoutHolder, @NotNull Plugin plugin) {
 		if (!resolved.compareAndSet(false, true)) return;
 		Bukkit.getScheduler().runTask(plugin, () -> {
 			if (timeoutHolder[0] != null) timeoutHolder[0].cancel();
 			if (localVars != null) Variables.setLocalVariables(event, localVars);
 			Delay.addDelayedEvent(event);
-			Trigger body = timedOut ? timeoutTrigger : receivedTrigger;
+			// A failure with no `on failure:` block falls through to the body, as it did before the branch existed.
+			Trigger body = switch (outcome) {
+				case TIMED_OUT -> timeoutTrigger;
+				case FAILED -> failureTrigger != null ? failureTrigger : receivedTrigger;
+				default -> receivedTrigger;
+			};
 			// walk (not execute) so locals the body sets survive into the continuation.
 			if (body != null) TriggerItem.walk(body, event);
 			if (next != null) TriggerItem.walk(next, event);

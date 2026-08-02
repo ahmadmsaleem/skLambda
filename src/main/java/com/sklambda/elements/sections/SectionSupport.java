@@ -38,6 +38,17 @@ final class SectionSupport {
 		return e;
 	}
 
+	/** Parses {@code text} as a boolean expression (e.g. an `initial:` entry), reporting an error and returning null otherwise. */
+	@SuppressWarnings("unchecked")
+	static @Nullable Expression<? extends Boolean> parseBoolean(String text) {
+		Expression<?> e = new SkriptParser(text, SkriptParser.ALL_FLAGS).parseExpression(Boolean.class);
+		if (e == null) {
+			Skript.error("Expected true or false, got: " + text);
+			return null;
+		}
+		return (Expression<? extends Boolean>) e;
+	}
+
 	/** A short "file:line" label for a section node, used in /sklambda listeners and leak warnings. */
 	static String sourceLocation(SectionNode node) {
 		String fileName = node.getConfig().getFileName();

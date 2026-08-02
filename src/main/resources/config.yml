@@ -1,7 +1,15 @@
 # skLambda configuration
-# Changes apply on server start/reload.
+#
+# /sklambda reload re-reads this file. Which settings actually take effect depends:
+#
+#   RELOAD  - applied immediately by /sklambda reload:
+#             everything under 'notifier', and 'update-notifications'.
+#   RESTART - needs a full server restart, because the syntax is handed to Skript
+#             once at startup and cannot be unregistered: 'lambda' and 'listener'.
+#
+# Each option below is tagged with which one it is.
 
-# Feature toggles. A disabled feature registers no syntax at all.
+# [RESTART] Feature toggles. A disabled feature registers no syntax at all.
 # All default to true (enabled).
 
 # Lambdas: the `lambda` type, `set ... to lambda`, inline lambdas,
@@ -12,19 +20,34 @@ lambda: true
 # `remaining triggers` / `remaining countdown`, and listener state conditions.
 listener: true
 
-# Notify op players on join when a newer skLambda release is available.
+# [RELOAD] Notify op players on join when a newer skLambda release is available.
 update-notifications: true
 
-# Listener leak detector. When enabled, skLambda periodically warns in the
-# console about listeners that have stayed registered longer than 'warn-after',
-# repeating the warning every 'warn-every'. Useful for finding listeners that
-# are never unregistered. Disabled by default to keep consoles quiet.
+# [RELOAD] Leak detector. When enabled, skLambda periodically warns in the console
+# about listeners and futures that have outlived their threshold. Useful for finding
+# listeners that are never unregistered and futures that never resolve.
+# Disabled by default to keep consoles quiet.
+#
+# Inspect the same things on demand with /sklambda listeners and /sklambda futures.
 notifier:
   enabled: false
+  # How often to repeat a warning about something that is still alive. Shared by both scans.
+  warn-every: 1 minute
+
+  # --- listeners ---
+  listeners: true
   # How long a listener may live before it is reported (a timespan, e.g. 30 seconds, 5 minutes, 2 hours).
   warn-after: 5 minutes
-  # How often to repeat the warning for a listener that is still alive.
-  warn-every: 1 minute
-  # The console message. Placeholders: {location} = script:line where it was created,
+  # Placeholders: {location} = script:line where it was created,
   # {event} = the event it listens for, {duration} = how long it has been alive.
   message: "[skLambda] Listener created in {location} ({event}) has been alive for {duration}."
+
+  # --- futures ---
+  # A future that never resolves leaves every `wait for` on it suspended forever.
+  futures:
+    enabled: true
+    # How long a future may stay pending before it is reported.
+    warn-after: 5 minutes
+    # Placeholders: {location} = script:line where it was created, {duration} = how long
+    # it has been pending, {awaiting} = how many `wait for` sections are suspended on it.
+    message: "[skLambda] Future created in {location} has been pending for {duration} ({awaiting} awaiting)."

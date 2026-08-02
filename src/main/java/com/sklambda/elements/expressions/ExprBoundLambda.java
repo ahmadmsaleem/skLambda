@@ -22,7 +22,7 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 				+ "Binding `5` to a `(a, b)` lambda gives a one-argument lambda that calls the original with `5` as "
 				+ "its first argument.",
 		"\tThe original's captured scope is kept (it performs the real call), and the new lambda's declared "
-				+ "parameters are the leftover ones, so `number of parameters` reads correctly."
+				+ "parameters are the leftover ones."
 })
 @Example("""
 		set {_add} to lambda (a: number, b: number) -> number: return {_a} + {_b}

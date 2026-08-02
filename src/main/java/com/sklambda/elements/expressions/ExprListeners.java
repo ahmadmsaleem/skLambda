@@ -27,7 +27,7 @@ import java.util.List;
 		"\t- `the last created listener` is the single most recently created one that is still active, or nothing."
 })
 @Example("""
-		send "%size of all active listeners% listeners running" to console
+		send "%amount of all active listeners% listeners running" to console
 		loop listeners owned by player:
 			unregister loop-value
 		send "newest: %owner of the last created listener%" to console

@@ -109,7 +109,7 @@ public class ExprLambda extends SimpleExpression<Lambda> {
 					Effect effect = tryParseEffect(bodyText);
 					if (effect != null) {
 						body = invocation -> {
-							TriggerItem.walk(effect, invocation);
+							if (!TriggerItem.walk(effect, invocation)) invocation.markErrored();
 							Variables.removeLocals(invocation);
 							return null;
 						};
