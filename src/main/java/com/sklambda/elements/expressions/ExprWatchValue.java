@@ -19,9 +19,9 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 @Name("Watched Value")
 @Description("Inside a watcher's `on change` block, the value before the change (`old value`) and after it (`new value`).")
 @Example("""
-		watch (balance of {_p}) every 2 seconds:
+		watch (level of {_p}) every 2 seconds:
 			on change:
-				send "balance: %old value% -> %new value%" to {_p}
+				send "level: %old value% -> %new value%" to {_p}
 		""")
 @Since("1.3.0")
 public class ExprWatchValue extends SimpleExpression<Object> {

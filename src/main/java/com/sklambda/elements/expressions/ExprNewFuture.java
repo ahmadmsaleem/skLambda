@@ -9,6 +9,7 @@ import ch.njol.skript.lang.SkriptParser.ParseResult;
 import ch.njol.skript.lang.util.SimpleExpression;
 import ch.njol.util.Kleenean;
 import com.sklambda.elements.types.Future;
+import com.sklambda.elements.types.FutureRegistry;
 import org.bukkit.event.Event;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -31,14 +32,17 @@ public class ExprNewFuture extends SimpleExpression<Future> {
 				.build());
 	}
 
+	private String origin = "unknown";
+
 	@Override
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
+		origin = FutureRegistry.currentOrigin();
 		return true;
 	}
 
 	@Override
 	protected Future @NotNull [] get(@NotNull Event event) {
-		return new Future[]{Future.pending()};
+		return new Future[]{Future.pending().origin(origin)};
 	}
 
 	@Override

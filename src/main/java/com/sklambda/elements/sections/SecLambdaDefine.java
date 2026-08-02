@@ -100,7 +100,8 @@ public class SecLambdaDefine extends EffectSection implements ReturnHandler<Obje
 	protected @Nullable TriggerItem walk(@NotNull Event event) {
 		ReturnableTrigger<Object> body = trigger;
 		Lambda lambda = new Lambda(params, returnType, invocation -> {
-			body.execute(invocation);
+			// execute() returns false when Skript caught a runtime error in the body.
+			if (!body.execute(invocation)) invocation.markErrored();
 			return invocation.getReturnValue();
 		}).capturing(Variables.copyLocalVariables(event));
 		target.change(event, new Object[]{lambda}, ChangeMode.SET);

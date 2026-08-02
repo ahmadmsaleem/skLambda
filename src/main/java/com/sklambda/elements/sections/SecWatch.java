@@ -45,11 +45,11 @@ import java.util.function.Function;
 })
 @Example("""
 		set {_p} to sender
-		watch (balance of {_p}) every 2 seconds within 5 minutes:
+		watch (level of {_p}) every 2 seconds within 5 minutes:
 			on change:
-				send "balance: %old value% -> %new value%" to {_p}
+				send "level: %old value% -> %new value%" to {_p}
 			on timeout:
-				send "stopped watching your balance" to {_p}
+				send "stopped watching your level" to {_p}
 		""")
 @Since("1.3.0")
 public class SecWatch extends EffectSection {

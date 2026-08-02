@@ -16,8 +16,8 @@ softdepend: [Skript]
 
 commands:
   sklambda:
-    description: Shows the skLambda version/link, or lists active listeners.
-    usage: /sklambda [listeners]
+    description: Shows the skLambda version/link, lists active listeners or pending futures, or reloads the config.
+    usage: /sklambda [listeners|futures|reload]
     aliases: [skl]
     permission: sklambda.admin
     permission-message: You don't have permission to use this command.
@@ -25,4 +25,7 @@ commands:
 permissions:
   sklambda.admin:
     description: Allows use of /sklambda.
+    default: op
+  sklambda.reload:
+    description: Allows use of /sklambda reload.
     default: op

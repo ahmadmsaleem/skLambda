@@ -33,7 +33,16 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 				+ "and always passes `none of`.",
 		"",
 		"\tPredicates run in their own context, so write them to take the value(s) they test as parameters "
-				+ "and supply them after `for`."
+				+ "and supply them after `for`.",
+		"",
+		"Using a stored predicate with Skript's own list operations. skLambda deliberately does NOT add "
+				+ "filter/count/first-match syntax, because Skript already has it: drop "
+				+ "`[{_pred} passes for input]` into these and they work with any lambda.",
+		"\tFilter: `%objects% where [{_pred} passes for input]`",
+		"\tCount matching: `amount of (%objects% where [{_pred} passes for input])`",
+		"\tFirst match: `first element of (%objects% where [{_pred} passes for input])`",
+		"\tMap with index: `%objects% transformed using [input index]` (Skript's `input index` works on a variable)",
+		"\tDescending sort: Skript's `sort %~objects% in descending order`"
 })
 @Example("""
 		set {is-op} to lambda (p: player): {_p} is op
@@ -54,6 +63,14 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 
 		listen for block break where {is-stone} passes for event-block:
 			on trigger: send "stone!" to event-player
+		""")
+@Example("""
+		# a stored predicate drives Skript's own list operations
+		set {_big} to lambda (n: number): {_n} > 3
+		set {_nums::*} to 1, 5, 2 and 9
+		set {_kept::*} to {_nums::*} where [{_big} passes for input]
+		send "%amount of ({_nums::*} where [{_big} passes for input])% over 3"
+		send "first: %first element of ({_nums::*} where [{_big} passes for input])%"
 		""")
 @Since("0.0.3-alpha")
 public class CondPredicatePasses extends Condition {

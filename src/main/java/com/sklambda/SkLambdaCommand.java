@@ -1,6 +1,8 @@
 package com.sklambda;
 
 import ch.njol.skript.registrations.Classes;
+import com.sklambda.elements.types.Future;
+import com.sklambda.elements.types.FutureRegistry;
 import com.sklambda.elements.types.Listener;
 import com.sklambda.elements.types.ListenerRegistry;
 import net.kyori.adventure.text.Component;
@@ -24,7 +26,7 @@ import java.util.List;
 public final class SkLambdaCommand implements CommandExecutor, TabCompleter {
 
 	private static final String modrinth = "https://modrinth.com/plugin/sklambda";
-	private static final List<String> SUBCOMMANDS = List.of("listeners");
+	private static final List<String> SUBCOMMANDS = List.of("listeners", "futures", "reload");
 
 	private final SkLambda plugin;
 
@@ -36,6 +38,20 @@ public final class SkLambdaCommand implements CommandExecutor, TabCompleter {
 	public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
 		if (args.length > 0 && args[0].equalsIgnoreCase("listeners")) {
 			sendListeners(sender);
+			return true;
+		}
+		if (args.length > 0 && args[0].equalsIgnoreCase("futures")) {
+			sendFutures(sender);
+			return true;
+		}
+		if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
+			if (!sender.hasPermission("sklambda.reload")) {
+				sender.sendMessage(Component.text("You don't have permission to do that.", NamedTextColor.RED));
+				return true;
+			}
+			plugin.reloadSettings();
+			sender.sendMessage(Component.text("skLambda config reloaded. ", NamedTextColor.RED)
+					.append(Component.text("Notifier settings applied; feature toggles need a server restart.", NamedTextColor.GRAY)));
 			return true;
 		}
 
@@ -56,6 +72,25 @@ public final class SkLambdaCommand implements CommandExecutor, TabCompleter {
 			return StringUtil.copyPartialMatches(args[0], SUBCOMMANDS, new ArrayList<>(SUBCOMMANDS.size()));
 		}
 		return Collections.emptyList();
+	}
+
+	private void sendFutures(@NotNull CommandSender sender) {
+		List<Future> pending = FutureRegistry.pending();
+		sender.sendMessage(Component.text("Pending futures: ", NamedTextColor.RED)
+				.append(Component.text(pending.size(), NamedTextColor.WHITE)));
+		for (Future future : pending) {
+			int awaiting = future.getAwaitingCount();
+			String awaitingText = awaiting == 0
+					? ", nothing awaiting it"
+					: ", " + awaiting + " await" + (awaiting == 1 ? "" : "s") + " suspended on it";
+			sender.sendMessage(Component.text("- ", NamedTextColor.GRAY)
+					.append(Component.text(future.getOrigin(), NamedTextColor.WHITE))
+					.append(Component.text(" pending for " + ListenerRegistry.formatDuration(future.getAgeMillis())
+							+ awaitingText, NamedTextColor.GRAY)));
+		}
+		if (pending.isEmpty()) {
+			sender.sendMessage(Component.text("Nothing is waiting to resolve.", NamedTextColor.GRAY));
+		}
 	}
 
 	private void sendListeners(@NotNull CommandSender sender) {

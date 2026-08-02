@@ -58,6 +58,7 @@ public final class Listener implements org.bukkit.event.Listener {
 	private final @Nullable Object owner;
 	final long creationId = ListenerRegistry.nextCreationId();
 	private long registeredAtMillis = -1;
+	private final long createdAtMillis = System.currentTimeMillis();
 	private long lastWarnedAtMillis = -1;
 	private boolean warnedAsync;
 
@@ -102,6 +103,11 @@ public final class Listener implements org.bukkit.event.Listener {
 		this.onChange = builder.onChange;
 		this.onRising = builder.onRising;
 		this.onFalling = builder.onFalling;
+		if (builder.initialWatchValue != null) {
+			// Seed the baseline so the FIRST poll is already a comparison, not just a sample.
+			this.lastWatchValue = builder.initialWatchValue;
+			this.hasWatchValue = true;
+		}
 		this.targetTriggers = builder.targetTriggers;
 		this.initialTimeoutTicks = builder.timeoutTicks;
 		this.tickIntervalTicks = builder.tickIntervalTicks;
@@ -132,6 +138,7 @@ public final class Listener implements org.bukkit.event.Listener {
 		private @Nullable Trigger onChange;
 		private @Nullable Trigger onRising;
 		private @Nullable Trigger onFalling;
+		private @Nullable Object initialWatchValue;
 		private int targetTriggers;
 		private long timeoutTicks = -1;
 		private long tickIntervalTicks;
@@ -159,6 +166,8 @@ public final class Listener implements org.bukkit.event.Listener {
 		public Builder onChange(@Nullable Trigger onChange) { this.onChange = onChange; return this; }
 		public Builder onRising(@Nullable Trigger onRising) { this.onRising = onRising; return this; }
 		public Builder onFalling(@Nullable Trigger onFalling) { this.onFalling = onFalling; return this; }
+		/** Declares the assumed state before the first poll, so an already-true condition can fire on that poll. */
+		public Builder initialWatchValue(@Nullable Object initialWatchValue) { this.initialWatchValue = initialWatchValue; return this; }
 		public Builder triggers(int targetTriggers) { this.targetTriggers = targetTriggers; return this; }
 		public Builder timeoutTicks(long timeoutTicks) { this.timeoutTicks = timeoutTicks; return this; }
 		public Builder tickIntervalTicks(long tickIntervalTicks) { this.tickIntervalTicks = tickIntervalTicks; return this; }
@@ -174,6 +183,22 @@ public final class Listener implements org.bukkit.event.Listener {
 
 	public String getSourceLocation() {
 		return sourceLocation;
+	}
+
+	/** The script file this listener was declared in, without the line number or directory. */
+	public String getScriptName() {
+		int colon = sourceLocation.lastIndexOf(':');
+		return colon > 0 ? sourceLocation.substring(0, colon) : sourceLocation;
+	}
+
+	/** When this listener was created (not when it was registered; a declared watcher is created first). */
+	public long getCreatedAtMillis() {
+		return createdAtMillis;
+	}
+
+	/** How long since creation, in milliseconds. Unlike {@link #getAliveMillis()} this is defined before registration. */
+	public long getAgeMillis() {
+		return Math.max(0, System.currentTimeMillis() - createdAtMillis);
 	}
 
 	public String getEventLabel() {
@@ -325,7 +350,6 @@ public final class Listener implements org.bukkit.event.Listener {
 	private synchronized void handleSync(Event event) {
 		if (!active || paused || skriptEvent == null || !skriptEvent.check(event)) return;
 		Object preexisting = enterScope(event);
-		boolean skipped;
 		try {
 			for (Condition c : filters) {
 				if (!c.check(event)) return;
@@ -334,9 +358,12 @@ public final class Listener implements org.bukkit.event.Listener {
 					&& System.currentTimeMillis() - lastTriggerMillis < cooldownMs) {
 				return;
 			}
+			// The counter and timestamps are listener state, not body state: an accepted event counts
+			// toward triggers:/cooldown: whether or not there's an `on trigger:` body to run.
+			currentTriggers++;
+			boolean skipped = false;
 			if (onTrigger != null) {
 				ListenerRegistry.SKIP_FLAG.set(Boolean.FALSE);
-				currentTriggers++;
 				ListenerRegistry.pushContext(this);
 				try {
 					onTrigger.execute(event);
@@ -345,12 +372,12 @@ public final class Listener implements org.bukkit.event.Listener {
 				}
 				skipped = ListenerRegistry.SKIP_FLAG.get();
 				ListenerRegistry.SKIP_FLAG.set(Boolean.FALSE);
-				if (skipped) {
-					currentTriggers--;
-				} else {
-					lastFiredEvent = event;
-					lastTriggerMillis = System.currentTimeMillis();
-				}
+			}
+			if (skipped) {
+				currentTriggers--;
+			} else {
+				lastFiredEvent = event;
+				lastTriggerMillis = System.currentTimeMillis();
 			}
 		} finally {
 			captureSnapshot(event);

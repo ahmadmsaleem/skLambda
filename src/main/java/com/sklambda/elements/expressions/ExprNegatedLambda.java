@@ -17,15 +17,17 @@ import org.skriptlang.skript.registration.SyntaxRegistry;
 
 @Name("Negated Lambda")
 @Description({
-		"Inverts a predicate lambda: the result passes exactly when the original does not. Handy with `passes` "
-				+ "and the `filtered where` / `count of ... where` list ops, and as the complement of `always()` / `never()`.",
+		"Inverts a predicate lambda: the result passes exactly when the original does not. Handy with `passes`, "
+				+ "and with Skript's own `%objects% where [<condition>]` and `sort ... by`: write "
+				+ "`[{_pred} passes for input]` to use a stored lambda inside them. Also the complement of "
+				+ "`always()` / `never()`.",
 		"\tThe negated lambda keeps the original's parameters and returns a boolean. A lambda that isn't a predicate "
 				+ "(null/non-boolean result) counts as not passing, so its negation passes."
 })
 @Example("""
 		set {_is-op} to lambda (p: player): {_p} is op
 		set {_not-op} to negated {_is-op}
-		set {_visitors::*} to all players filtered where {_not-op} passes
+		set {_visitors::*} to all players where [{_not-op} passes for input]
 		""")
 @Since("1.1.0")
 public class ExprNegatedLambda extends SimpleExpression<Lambda> {

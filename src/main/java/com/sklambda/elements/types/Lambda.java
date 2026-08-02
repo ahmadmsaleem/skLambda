@@ -52,7 +52,20 @@ public final class Lambda {
 		return value instanceof Lambda lambda ? lambda : null;
 	}
 
+	/** What a lambda call produced: its value, and whether the body errored out instead of finishing. */
+	public record Outcome(@Nullable Object value, boolean errored) {
+	}
+
 	public @Nullable Object invoke(Object @NotNull [] args) {
+		return call(args).value();
+	}
+
+	/**
+	 * Like {@link #invoke} but also reports whether the body errored. Callers that turn a lambda into a
+	 * result others observe (futures) need this: a Skript runtime error is swallowed by the trigger and
+	 * would otherwise be indistinguishable from a lambda that returned nothing.
+	 */
+	public Outcome call(Object @NotNull [] args) {
 		LambdaInvocationEvent event = new LambdaInvocationEvent();
 		event.setArgs(args);
 		// Replay captured locals first, then bind params so they shadow same-named captures.
@@ -69,7 +82,8 @@ public final class Lambda {
 			}
 			Variables.setVariable(param.name(), value, event, true);
 		}
-		return body.run(event);
+		Object value = body.run(event);
+		return new Outcome(value, event.hasErrored());
 	}
 
 	/** A partially-applied copy: {@code prefix} is pre-bound as the leading args, the rest supplied at call time, and the declared params shrink to match. */
@@ -84,7 +98,10 @@ public final class Lambda {
 			Object[] all = new Object[bound.length + rest.length];
 			System.arraycopy(bound, 0, all, 0, bound.length);
 			System.arraycopy(rest, 0, all, bound.length, rest.length);
-			return self.invoke(all);
+			// The inner call runs on its own event, so carry any error out to this one.
+			Outcome outcome = self.call(all);
+			if (outcome.errored()) invocation.markErrored();
+			return outcome.value();
 		};
 		return new Lambda(remaining, returnType, body);
 	}
@@ -92,7 +109,11 @@ public final class Lambda {
 	/** A predicate view that passes exactly when this lambda does not (a null/non-boolean result counts as not passing). */
 	public Lambda negated() {
 		Lambda self = this;
-		Body body = invocation -> !Boolean.TRUE.equals(self.invoke(invocation.getArgs()));
+		Body body = invocation -> {
+			Outcome outcome = self.call(invocation.getArgs());
+			if (outcome.errored()) invocation.markErrored();
+			return !Boolean.TRUE.equals(outcome.value());
+		};
 		return new Lambda(params, Classes.getExactClassInfo(Boolean.class), body);
 	}
 
