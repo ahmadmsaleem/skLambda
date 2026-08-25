@@ -4,10 +4,13 @@ version: @version@
 
 # Register custom type names here. The ¦ symbol separates singular from plural suffix.
 # These names are what users type in Skript scripts.
-# Example:
-# types:
-#     customtype: custom type¦s       -> "custom type" (singular) / "custom types" (plural)
-#     myregion: my region¦s            -> "my region" / "my regions"
+# Without an entry here Skript falls back to the raw key, so its own messages read
+# "a types.lambda cannot be saved" instead of "a lambda cannot be saved".
+types:
+    lambda: lambda¦s
+    listener: listener¦s
+    future: future¦s
+    endreason: end reason¦s
 
 # Register enum values here. The key must match the ClassInfo name.
 # Example:

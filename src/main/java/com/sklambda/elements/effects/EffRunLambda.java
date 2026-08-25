@@ -17,10 +17,11 @@ import org.skriptlang.skript.registration.SyntaxInfo;
 import org.skriptlang.skript.registration.SyntaxRegistry;
 
 @Name("Run Lambda")
-@Description("Runs a lambda, ignoring any return value.")
+@Description("Runs a lambda, ignoring any return value. Also spelled `call` or `invoke`; reach for the `call lambda` expression instead when you want the value back.")
 @Example("""
 		run lambda {_greet} with player
 		run lambda {_log_action}
+		call lambda {_log_action}
 		""")
 @Since("0.0.1-alpha")
 public class EffRunLambda extends Effect {
@@ -28,7 +29,9 @@ public class EffRunLambda extends Effect {
 	public static void register(@NotNull SyntaxRegistry registry) {
 		registry.register(SyntaxRegistry.EFFECT, SyntaxInfo.builder(EffRunLambda.class)
 				.supplier(EffRunLambda::new)
-				.addPatterns("run lambda %object% [with %-objects%]")
+				.addPatterns(
+						"run lambda %object% [with %-objects%]",
+						"(call|invoke) lambda %object% [with %-objects%]")
 				.build());
 	}
 
@@ -38,6 +41,7 @@ public class EffRunLambda extends Effect {
 	@Override
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		lambdaExpr = exprs[0];
+		if (Lambda.isUnparsed(lambdaExpr)) return false;
 		if (exprs[1] != null) {
 			argsExpr = LiteralUtils.defendExpression(exprs[1]);
 			return LiteralUtils.canInitSafely(argsExpr);

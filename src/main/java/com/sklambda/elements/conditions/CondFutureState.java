@@ -16,10 +16,16 @@ import org.skriptlang.skript.registration.SyntaxInfo;
 import org.skriptlang.skript.registration.SyntaxRegistry;
 
 @Name("Future State")
-@Description("Checks whether a future is done (resolved), still pending, or failed.")
+@Description({
+		"Checks whether a future is done (resolved), still pending, or failed.",
+		"\tSkBee also defines `%advancementprogress% is done` and claims that wording first, so write "
+				+ "`future {_f} is done` (or `{_f} is resolved`) when both addons are installed."
+})
 @Example("""
-		if {_f} is done:
+		if future {_f} is done:
 			send "result: %result of {_f}%"
+		if {_f} is resolved:
+			send "same check, unambiguous wording"
 		""")
 @Since("1.3.0")
 public class CondFutureState extends Condition {
@@ -32,12 +38,22 @@ public class CondFutureState extends Condition {
 		registry.register(SyntaxRegistry.CONDITION, SyntaxInfo.builder(CondFutureState.class)
 				.supplier(CondFutureState::new)
 				.addPatterns(
+						// Bare forms. `is done` is also SkBee's advancement-progress condition, which is
+						// registered first and so wins the line whenever SkBee is installed; the `future ...`
+						// spellings below are the unambiguous way to ask, and `resolved` / `completed` never clash.
 						"%future% is (done|complete[d]|resolved)",
 						"%future% (isn't|is not) (done|complete[d]|resolved)",
 						"%future% is pending",
 						"%future% (isn't|is not) pending",
 						"%future% (has failed|is failed)",
-						"%future% (hasn't|has not) failed")
+						"%future% (hasn't|has not) failed",
+						// Nothing else claims a condition opening with `future`, so these always reach us.
+						"[the] future [of] %future% is (done|complete[d]|resolved)",
+						"[the] future [of] %future% (isn't|is not) (done|complete[d]|resolved)",
+						"[the] future [of] %future% is pending",
+						"[the] future [of] %future% (isn't|is not) pending",
+						"[the] future [of] %future% (has failed|is failed)",
+						"[the] future [of] %future% (hasn't|has not) failed")
 				.build());
 	}
 
@@ -47,9 +63,21 @@ public class CondFutureState extends Condition {
 	@Override
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		futureExpr = exprs[0];
-		mode = matchedPattern / 2;
+		if (!couldBeFuture(futureExpr)) return false;
+		// The `future ...` spellings repeat the bare six in the same order, so fold them together.
+		mode = (matchedPattern % 6) / 2;
 		setNegated(matchedPattern % 2 == 1);
 		return true;
+	}
+
+	/**
+	 * Whether {@code expr} might actually yield a future at runtime. A `%future%` slot accepts anything
+	 * typed loosely enough to be converted, so an expression with a concrete unrelated type (an advancement
+	 * progress, say) reaches here too; declining those lets the next matching syntax have the line.
+	 */
+	private static boolean couldBeFuture(Expression<?> expr) {
+		Class<?> declared = expr.getSource().getReturnType();
+		return declared.isAssignableFrom(Future.class) || Future.class.isAssignableFrom(declared);
 	}
 
 	@Override

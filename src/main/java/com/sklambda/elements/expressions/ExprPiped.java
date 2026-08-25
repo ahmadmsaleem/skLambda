@@ -45,6 +45,7 @@ public class ExprPiped extends SimpleExpression<Object> {
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		value = LiteralUtils.defendExpression(exprs[0]);
 		lambdas = exprs[1];
+		if (Lambda.isUnparsed(lambdas)) return false;
 		return LiteralUtils.canInitSafely(value);
 	}
 

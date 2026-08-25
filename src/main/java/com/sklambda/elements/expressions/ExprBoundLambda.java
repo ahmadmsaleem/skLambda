@@ -45,6 +45,7 @@ public class ExprBoundLambda extends SimpleExpression<Lambda> {
 	@Override
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		lambdaExpr = exprs[0];
+		if (Lambda.isUnparsed(lambdaExpr)) return false;
 		argsExpr = LiteralUtils.defendExpression(exprs[1]);
 		return LiteralUtils.canInitSafely(argsExpr);
 	}

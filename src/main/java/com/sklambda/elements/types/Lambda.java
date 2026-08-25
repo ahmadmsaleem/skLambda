@@ -4,16 +4,37 @@ import ch.njol.skript.classes.ClassInfo;
 import ch.njol.skript.classes.Parser;
 import ch.njol.skript.lang.Expression;
 import ch.njol.skript.lang.ParseContext;
+import ch.njol.skript.lang.UnparsedLiteral;
 import ch.njol.skript.registrations.Classes;
+import org.skriptlang.skript.lang.comparator.Comparators;
+import org.skriptlang.skript.lang.comparator.Relation;
 import ch.njol.skript.variables.Variables;
 import com.sklambda.elements.events.LambdaInvocationEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
-public final class Lambda {
+/**
+ * A callable defined in a script.
+ *
+ * <p>It implements the common {@code java.util.function} shapes directly, so a lambda can be handed
+ * to any Java method that wants one. That is what makes reflective calls like
+ * {@code {_item}.editMeta({_lambda})} work: the argument really is a {@link Consumer}, so the method
+ * lookup matches and the body runs when Java invokes it. Which shape applies is decided by the caller,
+ * not the lambda: the same value can be a consumer here and a predicate there.
+ */
+public final class Lambda implements
+		Consumer<Object>, BiConsumer<Object, Object>,
+		Function<Object, Object>, Predicate<Object>,
+		Supplier<Object>, Runnable, Comparator<Object> {
 
 	public record Param(String name, ClassInfo<?> type, @Nullable Expression<?> defaultValue) {
 		public Param(String name, ClassInfo<?> type) {
@@ -23,7 +44,8 @@ public final class Lambda {
 
 	@FunctionalInterface
 	public interface Body {
-		@Nullable Object run(LambdaInvocationEvent event);
+		/** The values the body produced. Empty or null means it returned nothing. */
+		Object @Nullable [] run(LambdaInvocationEvent event);
 	}
 
 	private final List<Param> params;
@@ -47,17 +69,68 @@ public final class Lambda {
 		return locals == null ? this : new Lambda(params, returnType, body, locals);
 	}
 
-	/** Narrows an arbitrary value to a Lambda, or null if it isn't one. */
+	/**
+	 * Narrows an arbitrary value to a Lambda, or null if it isn't one.
+	 *
+	 * <p>skript-reflect's sections and function references are callable in exactly the same way, so they
+	 * are adapted here rather than at each of the twenty-odd places a lambda is accepted. That is what
+	 * lets `{_list::*} mapped with {_section}` work on a section someone already wrote.
+	 */
 	public static @Nullable Lambda from(@Nullable Object value) {
-		return value instanceof Lambda lambda ? lambda : null;
+		if (value instanceof Lambda lambda) return lambda;
+		return ReflectBridge.adapt(value);
 	}
 
-	/** What a lambda call produced: its value, and whether the body errored out instead of finishing. */
-	public record Outcome(@Nullable Object value, boolean errored) {
+	/** A lambda that calls a Skript function, keeping its parameter names and return type. */
+	@SuppressWarnings({"deprecation", "removal"})
+	public static Lambda fromFunction(ch.njol.skript.lang.function.Function<?> function) {
+		List<Param> params = new ArrayList<>();
+		for (ch.njol.skript.lang.function.Parameter<?> parameter : function.getParameters()) {
+			params.add(new Param(parameter.getName(), parameter.getType()));
+		}
+		Body body = invocation -> {
+			Object[] args = invocation.getArgs();
+			Object[][] functionParams = new Object[args.length][];
+			for (int i = 0; i < args.length; i++) {
+				functionParams[i] = new Object[]{args[i]};
+			}
+			return function.execute(functionParams);
+		};
+		return new Lambda(params, function.getReturnType(), body);
 	}
 
+	/**
+	 * True if {@code expr} is raw text Skript couldn't parse into anything. Such an operand can never hold a
+	 * lambda, so syntax expecting one must fail its parse instead of defending the literal: Skript then falls
+	 * through to lower-priority patterns, which is how `%objects% mapped with [length of "%input%"]` reaches
+	 * Skript's own bracket-body list ops rather than being swallowed here.
+	 */
+	public static boolean isUnparsed(@Nullable Expression<?> expr) {
+		return expr instanceof UnparsedLiteral;
+	}
+
+	/**
+	 * What a lambda call produced: every value it returned, and whether the body errored out instead of
+	 * finishing. A lambda is single-valued by contract, but a body is free to `return` a list, so the
+	 * values are carried as an array and narrowed by {@link #value()} for the single-valued callers.
+	 */
+	public record Outcome(Object @Nullable [] values, boolean errored) {
+
+		/** The first returned value, or null when the body returned nothing. */
+		public @Nullable Object value() {
+			return values == null || values.length == 0 ? null : values[0];
+		}
+	}
+
+	/** Calls the lambda and takes its first returned value: what every single-valued caller wants. */
 	public @Nullable Object invoke(Object @NotNull [] args) {
 		return call(args).value();
+	}
+
+	/** Calls the lambda and keeps every value it returned, for callers that accept a list. */
+	public Object @NotNull [] invokeAll(Object @NotNull [] args) {
+		Object[] values = call(args).values();
+		return values == null ? new Object[0] : values;
 	}
 
 	/**
@@ -78,12 +151,16 @@ public final class Lambda {
 			} else if (param.defaultValue() != null) {
 				value = param.defaultValue().getSingle(event);
 			} else {
-				continue;
+				// A required argument is missing. Running the body anyway produces a plausible-looking wrong
+				// answer (Skript's arithmetic quietly absorbs the nothing), so refuse the call instead: the
+				// caller gets nothing back and, where it matters, a failed future rather than bad data.
+				event.markErrored();
+				return new Outcome(null, true);
 			}
 			Variables.setVariable(param.name(), value, event, true);
 		}
-		Object value = body.run(event);
-		return new Outcome(value, event.hasErrored());
+		Object[] values = body.run(event);
+		return new Outcome(values, event.hasErrored());
 	}
 
 	/** A partially-applied copy: {@code prefix} is pre-bound as the leading args, the rest supplied at call time, and the declared params shrink to match. */
@@ -101,7 +178,7 @@ public final class Lambda {
 			// The inner call runs on its own event, so carry any error out to this one.
 			Outcome outcome = self.call(all);
 			if (outcome.errored()) invocation.markErrored();
-			return outcome.value();
+			return outcome.values();
 		};
 		return new Lambda(remaining, returnType, body);
 	}
@@ -112,9 +189,75 @@ public final class Lambda {
 		Body body = invocation -> {
 			Outcome outcome = self.call(invocation.getArgs());
 			if (outcome.errored()) invocation.markErrored();
-			return !Boolean.TRUE.equals(outcome.value());
+			return new Object[]{!Boolean.TRUE.equals(outcome.value())};
 		};
 		return new Lambda(params, Classes.getExactClassInfo(Boolean.class), body);
+	}
+
+	// --- java.util.function shapes -------------------------------------------------------------------
+	// One body, several signatures: Java picks whichever the receiving method declares.
+
+	/** {@link Consumer}: runs the body with one argument and drops the result. */
+	@Override
+	public void accept(@Nullable Object arg) {
+		invoke(new Object[]{arg});
+	}
+
+	/** {@link BiConsumer}: runs the body with two arguments and drops the result. */
+	@Override
+	public void accept(@Nullable Object first, @Nullable Object second) {
+		invoke(new Object[]{first, second});
+	}
+
+	/** {@link Function}: runs the body with one argument and hands back its value. */
+	@Override
+	public @Nullable Object apply(@Nullable Object arg) {
+		return invoke(new Object[]{arg});
+	}
+
+	/** {@link Predicate}: anything other than true counts as not passing, as everywhere else in skLambda. */
+	@Override
+	public boolean test(@Nullable Object arg) {
+		return Boolean.TRUE.equals(invoke(new Object[]{arg}));
+	}
+
+	/** {@link Supplier}: runs the body with no arguments. */
+	@Override
+	public @Nullable Object get() {
+		return invoke(new Object[0]);
+	}
+
+	/** {@link Runnable}: runs the body with no arguments and drops the result. */
+	@Override
+	public void run() {
+		invoke(new Object[0]);
+	}
+
+	/** {@link Comparator}: the body is called with both elements and returns their ordering as a number. */
+	@Override
+	public int compare(@Nullable Object first, @Nullable Object second) {
+		Object result = invoke(new Object[]{first, second});
+		return result instanceof Number number ? Integer.signum((int) Math.signum(number.doubleValue())) : 0;
+	}
+
+	public <T> Predicate<T> asPredicate() {
+		return LambdaAdapters.asPredicate(this);
+	}
+
+	public <T, R> Function<T, R> asFunction() {
+		return LambdaAdapters.asFunction(this);
+	}
+
+	public <A, B, R> java.util.function.BiFunction<A, B, R> asBiFunction() {
+		return LambdaAdapters.asBiFunction(this);
+	}
+
+	public <T> Consumer<T> asConsumer() {
+		return LambdaAdapters.asConsumer(this);
+	}
+
+	public <R> Supplier<R> asSupplier() {
+		return LambdaAdapters.asSupplier(this);
 	}
 
 	@Override
@@ -158,6 +301,11 @@ public final class Lambda {
 						return lambda.toString();
 					}
 				}));
+
+		// Two lambdas are the same only when they are the same object; without this Skript has no
+		// comparator for the type and `contains` / `is` on a list of them always reads false.
+		Comparators.registerComparator(Lambda.class, Lambda.class,
+				(first, second) -> Relation.get(first == second));
 	}
 
 }

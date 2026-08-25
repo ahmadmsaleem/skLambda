@@ -67,26 +67,7 @@ public class ExprFunctionLambda extends SimpleExpression<Lambda> {
 			Skript.warning("No global function named '" + name + "' was found for 'function lambda'.");
 			return new Lambda[0];
 		}
-		return new Lambda[]{toLambda(function)};
-	}
-
-	@SuppressWarnings({"deprecation", "removal"})
-	private static Lambda toLambda(Function<?> function) {
-		List<Param> params = new ArrayList<>();
-		for (Parameter<?> parameter : function.getParameters()) {
-			params.add(new Param(parameter.getName(), parameter.getType()));
-		}
-		ClassInfo<?> returnType = function.getReturnType();
-		Lambda.Body body = invocation -> {
-			Object[] args = invocation.getArgs();
-			Object[][] functionParams = new Object[args.length][];
-			for (int i = 0; i < args.length; i++) {
-				functionParams[i] = new Object[]{args[i]};
-			}
-			Object[] result = function.execute(functionParams);
-			return result == null || result.length == 0 ? null : result[0];
-		};
-		return new Lambda(params, returnType, body);
+		return new Lambda[]{Lambda.fromFunction(function)};
 	}
 
 	@Override

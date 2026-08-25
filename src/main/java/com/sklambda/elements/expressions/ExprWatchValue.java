@@ -1,5 +1,6 @@
 package com.sklambda.elements.expressions;
 
+import ch.njol.skript.Skript;
 import ch.njol.skript.doc.Description;
 import ch.njol.skript.doc.Example;
 import ch.njol.skript.doc.Name;
@@ -8,6 +9,7 @@ import ch.njol.skript.lang.Expression;
 import ch.njol.skript.lang.SkriptParser.ParseResult;
 import ch.njol.skript.lang.util.SimpleExpression;
 import ch.njol.util.Kleenean;
+import com.sklambda.elements.sections.SecListen;
 import com.sklambda.elements.types.Listener;
 import com.sklambda.elements.types.ListenerRegistry;
 import org.bukkit.event.Event;
@@ -40,6 +42,13 @@ public class ExprWatchValue extends SimpleExpression<Object> {
 	@Override
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		isNew = matchedPattern == 1;
+		// These are bare words, so without a context check they are claimed in every script on the server
+		// and quietly read as nothing outside a watcher. `end reason` already guards itself the same way.
+		if (!SecListen.isInsideListenCallback()) {
+			Skript.error((isNew ? "new value" : "old value")
+					+ " is only valid inside a watcher callback (on change: / on rising: / on falling:).");
+			return false;
+		}
 		return true;
 	}
 

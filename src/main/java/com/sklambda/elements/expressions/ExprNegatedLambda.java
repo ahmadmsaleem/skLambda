@@ -44,7 +44,7 @@ public class ExprNegatedLambda extends SimpleExpression<Lambda> {
 	@Override
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		lambdaExpr = exprs[0];
-		return true;
+		return !Lambda.isUnparsed(lambdaExpr);
 	}
 
 	@Override

@@ -14,6 +14,7 @@ import org.bukkit.event.Event;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.skriptlang.skript.registration.DefaultSyntaxInfos;
+import org.skriptlang.skript.registration.SyntaxInfo;
 import org.skriptlang.skript.registration.SyntaxRegistry;
 
 @Name("Call Lambda")
@@ -28,8 +29,11 @@ public class ExprCallLambda extends SimpleExpression<Object> {
 	public static void register(@NotNull SyntaxRegistry registry) {
 		registry.register(SyntaxRegistry.EXPRESSION, DefaultSyntaxInfos.Expression.builder(ExprCallLambda.class, Object.class)
 				.supplier(ExprCallLambda::new)
+				// Ahead of `[the] result[s] of %futures%`, which otherwise swallows the whole line: its
+				// `%futures%` slot takes any object through a converter, leaving this reading as nothing.
+				.priority(SyntaxInfo.SIMPLE)
 				.addPatterns(
-						"[the] result of calling lambda %object% [with %-objects%]",
+						"[the] result[plural:s] of calling lambda %object% [with %-objects%]",
 						"calling lambda %object% [with %-objects%]",
 						"(call|invoke) lambda %object% [with %-objects%]")
 				.build());
@@ -37,10 +41,13 @@ public class ExprCallLambda extends SimpleExpression<Object> {
 
 	private Expression<?> lambdaExpr;
 	private @Nullable Expression<?> argsExpr;
+	private boolean plural;
 
 	@Override
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		lambdaExpr = exprs[0];
+		if (Lambda.isUnparsed(lambdaExpr)) return false;
+		plural = parseResult.hasTag("plural");
 		if (exprs[1] != null) {
 			argsExpr = LiteralUtils.defendExpression(exprs[1]);
 			return LiteralUtils.canInitSafely(argsExpr);
@@ -53,6 +60,7 @@ public class ExprCallLambda extends SimpleExpression<Object> {
 		Lambda lambda = Lambda.from(lambdaExpr.getSingle(event));
 		if (lambda == null) return null;
 		Object[] args = argsExpr != null ? argsExpr.getArray(event) : new Object[0];
+		if (plural) return lambda.invokeAll(args);
 		Object result = lambda.invoke(args);
 		if (result == null) return null;
 		return new Object[]{result};
@@ -60,7 +68,7 @@ public class ExprCallLambda extends SimpleExpression<Object> {
 
 	@Override
 	public boolean isSingle() {
-		return true;
+		return !plural;
 	}
 
 	@Override

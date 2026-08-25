@@ -46,6 +46,7 @@ public class ExprMapped extends SimpleExpression<Object> {
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		source = LiteralUtils.defendExpression(exprs[0]);
 		mapper = exprs[1];
+		if (Lambda.isUnparsed(mapper)) return false;
 		return LiteralUtils.canInitSafely(source);
 	}
 

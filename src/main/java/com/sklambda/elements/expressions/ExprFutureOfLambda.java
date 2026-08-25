@@ -56,6 +56,7 @@ public class ExprFutureOfLambda extends SimpleExpression<Future> {
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		origin = FutureRegistry.currentOrigin();
 		lambdaExpr = exprs[0];
+		if (Lambda.isUnparsed(lambdaExpr)) return false;
 		if (exprs[1] != null) {
 			argsExpr = LiteralUtils.defendExpression(exprs[1]);
 			return LiteralUtils.canInitSafely(argsExpr);

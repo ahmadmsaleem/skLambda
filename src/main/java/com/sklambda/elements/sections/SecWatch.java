@@ -38,7 +38,7 @@ import java.util.function.Function;
 		"\t`watch %value% every %timespan%:` re-evaluates the expression each interval.",
 		"\t`watch %lambda% for %arguments% every %timespan%:` calls the lambda with those arguments each interval.",
 		"\tInside `on change:`, `old value` and `new value` hold the previous and current values.",
-		"\tOptional entry: `owner: %offlineplayer/entity/chunk/world%` auto-stops the watcher when the owner goes away.",
+		"\tOptional entry: `owner: %offlineplayer/entity/chunk/world/inventory%` auto-stops the watcher when the owner goes away. An inventory owner stops it when the last viewer closes that menu, which is how a watcher driving an open GUI cleans itself up.",
 		"\tOptional blocks: `on timeout:` (needs `within %timespan%`) and `on end:` (runs whenever the watcher stops, for teardown).",
 		"\tThe result is a normal listener handle: `pause`, `resume`, `unregister`, `is registered`, and `/sklambda listeners` all work. Declare one with `set %~object% to a watcher on ...` then `register` it, or use the bare `watch ...` form to start immediately.",
 		"\tThe value is read on the main thread, so the watched expression/lambda must be safe there (the usual Skript rule)."
@@ -72,6 +72,7 @@ public class SecWatch extends EffectSection {
 	private Function<Event, Object> poller;
 	private @Nullable Expression<?> ownerExpr;
 	private String sourceLocation = "unknown";
+	private String scriptName = "unknown";
 	private String watchLabel = "value";
 	private @Nullable Trigger onChange;
 	private @Nullable Trigger onTimeout;
@@ -109,6 +110,7 @@ public class SecWatch extends EffectSection {
 			watchLabel = "value";
 		}
 		sourceLocation = SectionSupport.sourceLocation(sectionNode);
+		scriptName = SectionSupport.scriptName(sectionNode);
 
 		poller = buildPoller();
 
@@ -233,6 +235,7 @@ public class SecWatch extends EffectSection {
 				.tickIntervalTicks(intervalTicks)
 				.timeoutTicks(timeoutTicks)
 				.sourceLocation(sourceLocation)
+				.scriptName(scriptName)
 				.eventLabel(watchLabel)
 				.build();
 		watcher.captureFrom(event);
