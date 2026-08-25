@@ -56,6 +56,7 @@ public class ExprTakenWhile extends SimpleExpression<Object> {
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		source = LiteralUtils.defendExpression(exprs[0]);
 		predicate = exprs[1];
+		if (Lambda.isUnparsed(predicate)) return false;
 		dropped = matchedPattern == DROPPED;
 		return LiteralUtils.canInitSafely(source);
 	}

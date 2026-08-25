@@ -7,6 +7,8 @@ import ch.njol.skript.lang.ParseContext;
 import ch.njol.skript.lang.SkriptEvent;
 import ch.njol.skript.lang.Trigger;
 import ch.njol.skript.registrations.Classes;
+import org.skriptlang.skript.lang.comparator.Comparators;
+import org.skriptlang.skript.lang.comparator.Relation;
 import ch.njol.skript.variables.Variables;
 import com.sklambda.SkLambda;
 import com.sklambda.elements.events.ListenerDetachedEvent;
@@ -54,6 +56,7 @@ public final class Listener implements org.bukkit.event.Listener {
 	private final @Nullable Trigger onFalling;
 
 	private final String sourceLocation;
+	private final String scriptName;
 	private final String eventLabel;
 	private final @Nullable Object owner;
 	final long creationId = ListenerRegistry.nextCreationId();
@@ -113,6 +116,7 @@ public final class Listener implements org.bukkit.event.Listener {
 		this.tickIntervalTicks = builder.tickIntervalTicks;
 		this.cooldownMs = builder.cooldownMs;
 		this.sourceLocation = builder.sourceLocation;
+		this.scriptName = builder.scriptName;
 		this.eventLabel = builder.eventLabel;
 		this.owner = builder.owner;
 	}
@@ -144,6 +148,7 @@ public final class Listener implements org.bukkit.event.Listener {
 		private long tickIntervalTicks;
 		private long cooldownMs;
 		private String sourceLocation = "unknown";
+		private String scriptName = "unknown";
 		private String eventLabel = "";
 		private @Nullable Object owner;
 
@@ -173,6 +178,8 @@ public final class Listener implements org.bukkit.event.Listener {
 		public Builder tickIntervalTicks(long tickIntervalTicks) { this.tickIntervalTicks = tickIntervalTicks; return this; }
 		public Builder cooldownMillis(long cooldownMs) { this.cooldownMs = cooldownMs; return this; }
 		public Builder sourceLocation(String sourceLocation) { this.sourceLocation = sourceLocation; return this; }
+
+		public Builder scriptName(String scriptName) { this.scriptName = scriptName; return this; }
 		public Builder eventLabel(String eventLabel) { this.eventLabel = eventLabel; return this; }
 		public Builder owner(@Nullable Object owner) { this.owner = owner; return this; }
 
@@ -187,9 +194,9 @@ public final class Listener implements org.bukkit.event.Listener {
 
 	/** The script file this listener was declared in, without the line number or directory. */
 	public String getScriptName() {
-		int colon = sourceLocation.lastIndexOf(':');
-		return colon > 0 ? sourceLocation.substring(0, colon) : sourceLocation;
+		return scriptName;
 	}
+
 
 	/** When this listener was created (not when it was registered; a declared watcher is created first). */
 	public long getCreatedAtMillis() {
@@ -644,6 +651,11 @@ public final class Listener implements org.bukkit.event.Listener {
 						return listener.toString();
 					}
 				}));
+
+		// Two listeners are the same only when they are the same object; without this Skript has no
+		// comparator for the type and `contains` / `is` on a list of them always reads false.
+		Comparators.registerComparator(Listener.class, Listener.class,
+				(first, second) -> Relation.get(first == second));
 	}
 
 }

@@ -102,7 +102,7 @@ public class SecLambdaDefine extends EffectSection implements ReturnHandler<Obje
 		Lambda lambda = new Lambda(params, returnType, invocation -> {
 			// execute() returns false when Skript caught a runtime error in the body.
 			if (!body.execute(invocation)) invocation.markErrored();
-			return invocation.getReturnValue();
+			return invocation.getReturnValues();
 		}).capturing(Variables.copyLocalVariables(event));
 		target.change(event, new Object[]{lambda}, ChangeMode.SET);
 		return walk(event, false);
@@ -111,13 +111,16 @@ public class SecLambdaDefine extends EffectSection implements ReturnHandler<Obje
 	@Override
 	public void returnValues(@NotNull Event event, @NotNull Expression<?> value) {
 		if (event instanceof LambdaInvocationEvent lambdaEvent) {
-			lambdaEvent.setReturnValue(value.getSingle(event));
+			// Keep every value: `return {_list::*}` used to reach getSingle and come back as nothing.
+			lambdaEvent.setReturnValues(value.getArray(event));
 		}
 	}
 
 	@Override
 	public boolean isSingleReturnValue() {
-		return true;
+		// A lambda is single-valued to its callers, but the body may still `return` a list; the extra
+		// values are kept for `results of calling lambda` rather than silently dropped at parse time.
+		return false;
 	}
 
 	@Override

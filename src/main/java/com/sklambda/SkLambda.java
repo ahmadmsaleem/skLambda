@@ -9,6 +9,7 @@ import com.sklambda.elements.types.Future;
 import com.sklambda.elements.types.FutureRegistry;
 import com.sklambda.elements.types.ListenerRegistry;
 import com.sklambda.elements.types.OwnerCleanup;
+import com.sklambda.modules.GuiModule;
 import com.sklambda.modules.LambdaModule;
 import com.sklambda.modules.ListenerModule;
 import org.bukkit.command.PluginCommand;
@@ -68,6 +69,8 @@ public class SkLambda extends JavaPlugin {
 		List<AddonModule> modules = new ArrayList<>();
 		if (lambdaEnabled) modules.add(new LambdaModule());
 		if (listenerEnabled) modules.add(new ListenerModule());
+		// Registers only when skript-gui is present; the module declines to load otherwise.
+		if (lambdaEnabled) modules.add(new GuiModule());
 		addon.loadModules(modules.toArray(new AddonModule[0]));
 
 		PluginCommand command = getCommand("sklambda");

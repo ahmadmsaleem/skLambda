@@ -54,6 +54,7 @@ public class ExprScanned extends SimpleExpression<Object> {
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		source = LiteralUtils.defendExpression(exprs[0]);
 		reducer = exprs[1];
+		if (Lambda.isUnparsed(reducer)) return false;
 		if (matchedPattern == 0) seed = LiteralUtils.defendExpression(exprs[2]);
 		return LiteralUtils.canInitSafely(source) && (seed == null || LiteralUtils.canInitSafely(seed));
 	}
@@ -78,8 +79,11 @@ public class ExprScanned extends SimpleExpression<Object> {
 			Lambda lambda = Lambda.from(reducer.getSingle(event));
 			if (lambda == null) return out.toArray();
 			for (int i = start; i < in.length; i++) {
-				accumulator = lambda.invoke(new Object[]{accumulator, in[i]});
-				if (accumulator != null) out.add(accumulator);
+				Object next = lambda.invoke(new Object[]{accumulator, in[i]});
+				// As in `reduced with`: a step returning nothing is skipped rather than resetting the fold.
+				if (next == null) continue;
+				accumulator = next;
+				out.add(accumulator);
 			}
 		}
 		return out.toArray();

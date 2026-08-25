@@ -21,8 +21,8 @@ public final class ConstantPredicateFunctions {
 
 	public static void register(@NotNull SkriptAddon addon) {
 		ClassInfo<Boolean> bool = Classes.getExactClassInfo(Boolean.class);
-		Lambda always = new Lambda(List.of(), bool, invocation -> Boolean.TRUE);
-		Lambda never = new Lambda(List.of(), bool, invocation -> Boolean.FALSE);
+		Lambda always = new Lambda(List.of(), bool, invocation -> new Object[]{Boolean.TRUE});
+		Lambda never = new Lambda(List.of(), bool, invocation -> new Object[]{Boolean.FALSE});
 
 		Functions.register(DefaultFunction.builder(addon, "always", Lambda.class)
 				.description("A predicate lambda that always passes: it ignores its arguments and returns true.")

@@ -65,7 +65,7 @@ public class ExprFutureMapped extends SimpleExpression<Future> {
 		origin = FutureRegistry.currentOrigin();
 		futureExpr = exprs[0];
 		lambdaExpr = exprs[1];
-		return true;
+		return !Lambda.isUnparsed(lambdaExpr);
 	}
 
 	@Override

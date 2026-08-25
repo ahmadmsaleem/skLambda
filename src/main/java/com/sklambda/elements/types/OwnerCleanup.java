@@ -10,8 +10,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.Nullable;
@@ -36,6 +38,12 @@ public final class OwnerCleanup {
 		});
 		registerCleanupHook(plugin, ChunkUnloadEvent.class, evt -> ((ChunkUnloadEvent) evt).getChunk());
 		registerCleanupHook(plugin, WorldUnloadEvent.class, evt -> ((WorldUnloadEvent) evt).getWorld());
+		// An inventory owner (a menu) is gone once nobody is looking at it any more. The closing viewer is
+		// still listed at MONITOR time, so one remaining viewer means this close was the last one.
+		registerCleanupHook(plugin, InventoryCloseEvent.class, evt -> {
+			Inventory inventory = ((InventoryCloseEvent) evt).getInventory();
+			return inventory.getViewers().size() > 1 ? null : inventory;
+		});
 	}
 
 	private static void registerCleanupHook(Plugin plugin, Class<? extends Event> eventType,
@@ -56,6 +64,8 @@ public final class OwnerCleanup {
 		if (a instanceof Chunk ca && b instanceof Chunk cb)
 			return ca.getX() == cb.getX() && ca.getZ() == cb.getZ() && ca.getWorld().getUID().equals(cb.getWorld().getUID());
 		if (a instanceof World wa && b instanceof World wb) return wa.getUID().equals(wb.getUID());
+		// Inventories have no identity beyond the object itself, and two empty chests are equal by value.
+		if (a instanceof Inventory || b instanceof Inventory) return a == b;
 		return a.equals(b);
 	}
 }

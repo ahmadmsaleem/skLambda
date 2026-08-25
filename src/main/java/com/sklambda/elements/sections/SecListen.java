@@ -49,7 +49,7 @@ import java.util.regex.Pattern;
 		"\t`  - countdown: timespan` sets an auto-timeout duration. Required when `on timeout:` is used.",
 		"\t`  - triggers: number` caps how many times the listener fires before `on completion:` runs.",
 		"\t`  - cooldown: timespan` debounces the listener: after an accepted trigger, further events within this window are ignored, so they don't run `on trigger:` and don't count toward `triggers:`. Per-listener, so scope it to a player (via `owner:`/`where`) for a per-player cooldown.",
-		"\t`  - owner: offlineplayer/entity/chunk/world` scopes the listener to that owner and auto-unregisters when the owner goes away: a player disconnecting, an entity being removed from the world (death/despawn), or a chunk/world unloading. Any owner can be bulk-cleaned with `unregister all listeners owned by %object%`.",
+		"\t`  - owner: offlineplayer/entity/chunk/world/inventory` scopes the listener to that owner and auto-unregisters when the owner goes away: a player disconnecting, an entity being removed from the world (death/despawn), a chunk/world unloading, or the last viewer closing an inventory (which is how a watcher driving an open menu stops itself). Any owner can be bulk-cleaned with `unregister all listeners owned by %object%`.",
 		"\t",
 		"Optional sections:",
 		"\t`  - where:` adds extra filter conditions that must all pass. Combines with any inline `where` clause.",
@@ -135,6 +135,7 @@ public class SecListen extends EffectSection {
 	private boolean autoRegister;
 	private @Nullable Expression<?> target;
 	private String sourceLocation = "unknown";
+	private String scriptName = "unknown";
 	private String eventLabel = "";
 	private SkriptEvent skriptEvent;
 	private Class<? extends Event>[] eventClasses;
@@ -181,6 +182,7 @@ public class SecListen extends EffectSection {
 		String eventPattern = full.trim();
 		eventLabel = eventPattern;
 		sourceLocation = SectionSupport.sourceLocation(sectionNode);
+		scriptName = SectionSupport.scriptName(sectionNode);
 
 		skriptEvent = SkriptEvent.parse(eventPattern, sectionNode, "Unrecognized event pattern: " + eventPattern);
 		if (skriptEvent == null) return false;
@@ -450,6 +452,7 @@ public class SecListen extends EffectSection {
 				.tickIntervalTicks(tickTicks)
 				.cooldownMillis(cooldownMs)
 				.sourceLocation(sourceLocation)
+				.scriptName(scriptName)
 				.eventLabel(eventLabel)
 				.owner(owner)
 				.build();

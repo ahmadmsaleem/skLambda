@@ -103,7 +103,7 @@ public class ExprLambda extends SimpleExpression<Lambda> {
 			} else {
 				Condition condition = tryParseCondition(bodyText);
 				if (condition != null) {
-					body = invocation -> condition.check(invocation);
+					body = invocation -> new Object[]{condition.check(invocation)};
 					if (returnType == null) returnType = Classes.getExactClassInfo(Boolean.class);
 				} else {
 					Effect effect = tryParseEffect(bodyText);
@@ -180,7 +180,7 @@ public class ExprLambda extends SimpleExpression<Lambda> {
 	/** A lambda body that evaluates {@code value} and returns it, cleaning up the invocation's locals. */
 	private static Lambda.Body valueBody(Expression<?> value) {
 		return invocation -> {
-			Object result = value.getSingle(invocation);
+			Object[] result = value.getArray(invocation);
 			Variables.removeLocals(invocation);
 			return result;
 		};

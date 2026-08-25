@@ -50,6 +50,7 @@ public class ExprMinMaxBy extends SimpleExpression<Object> {
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		source = LiteralUtils.defendExpression(exprs[0]);
 		keyExtractor = exprs[1];
+		if (Lambda.isUnparsed(keyExtractor)) return false;
 		max = matchedPattern == 1;
 		return LiteralUtils.canInitSafely(source);
 	}

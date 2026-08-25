@@ -9,7 +9,7 @@ public final class LambdaInvocationEvent extends Event {
 
 	private static final HandlerList HANDLERS = new HandlerList();
 
-	private @Nullable Object returnValue;
+	private Object @Nullable [] returnValues;
 	private Object @NotNull [] args = new Object[0];
 	private boolean errored;
 
@@ -25,12 +25,13 @@ public final class LambdaInvocationEvent extends Event {
 		this.errored = true;
 	}
 
-	public @Nullable Object getReturnValue() {
-		return returnValue;
+	/** Every value the body returned, or null if it returned nothing. */
+	public Object @Nullable [] getReturnValues() {
+		return returnValues;
 	}
 
-	public void setReturnValue(@Nullable Object value) {
-		this.returnValue = value;
+	public void setReturnValues(Object @Nullable [] values) {
+		this.returnValues = values;
 	}
 
 	/** The positional arguments this lambda was invoked with. */

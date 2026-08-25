@@ -40,7 +40,10 @@ public class ExprFutureResult extends SimpleExpression<Object> {
 	@Override
 	public boolean init(Expression<?>[] exprs, int matchedPattern, @NotNull Kleenean isDelayed, @NotNull ParseResult parseResult) {
 		futuresExpr = exprs[0];
-		return true;
+		// `%futures%` takes anything convertible, so an expression with a concrete unrelated return type
+		// would be claimed here and read as nothing. Decline it and let the next syntax match.
+		Class<?> declared = futuresExpr.getSource().getReturnType();
+		return declared.isAssignableFrom(Future.class) || Future.class.isAssignableFrom(declared);
 	}
 
 	@Override

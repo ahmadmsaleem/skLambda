@@ -50,6 +50,7 @@ public class ExprZipped extends SimpleExpression<Object> {
 		first = LiteralUtils.defendExpression(exprs[0]);
 		second = LiteralUtils.defendExpression(exprs[1]);
 		combiner = exprs[2];
+		if (Lambda.isUnparsed(combiner)) return false;
 		return LiteralUtils.canInitSafely(first) && LiteralUtils.canInitSafely(second);
 	}
 

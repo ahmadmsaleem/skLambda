@@ -4,6 +4,8 @@ import ch.njol.skript.classes.ClassInfo;
 import ch.njol.skript.classes.Parser;
 import ch.njol.skript.lang.ParseContext;
 import ch.njol.skript.registrations.Classes;
+import org.skriptlang.skript.lang.comparator.Comparators;
+import org.skriptlang.skript.lang.comparator.Relation;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -257,6 +259,11 @@ public final class Future {
 						return future.toString();
 					}
 				}));
+
+		// Two futures are the same only when they are the same object; without this Skript has no
+		// comparator for the type and `contains` / `is` on a list of them always reads false.
+		Comparators.registerComparator(Future.class, Future.class,
+				(first, second) -> Relation.get(first == second));
 	}
 
 }

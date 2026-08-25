@@ -12,7 +12,8 @@ website: https://github.com/ahmadmsaleem/skLambda
 # softdepend = optional dependency (won't crash if missing, but loads after these plugins)
 # depend = required dependency (server won't start without it)
 # Skript should be softdepend because we handle the missing check ourselves in onEnable()
-softdepend: [Skript]
+# skript-gui too: the gui module checks for it at enable time, so we have to load after it
+softdepend: [Skript, skript-gui]
 
 commands:
   sklambda:
