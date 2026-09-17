@@ -1,0 +1,11 @@
+test "skLambda - bind pre-fills the leading argument":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_add5} to {_add} with 5 bound
+	assert (call lambda {_add5} with 10) is 15 with "expected 15"
+
+test "skLambda - binding every argument yields a thunk":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_answer} to {_add} with (40 and 2) bound
+	assert (call lambda {_answer}) is 42 with "expected 42"

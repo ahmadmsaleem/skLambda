@@ -1,0 +1,37 @@
+test "skLambda - all of":
+	set {_a} to lambda (n: number): {_n} > 0
+	set {_b} to lambda (n: number): {_n} < 100
+	add {_a} to {_checks::*}
+	add {_b} to {_checks::*}
+	assert all of {_checks::*} passes for 50 with "both hold for 50"
+	assert all of {_checks::*} doesn't pass for 200 with "the second fails for 200"
+
+test "skLambda - any of":
+	set {_a} to lambda (n: number): {_n} > 100
+	set {_b} to lambda (n: number): {_n} < 0
+	add {_a} to {_checks::*}
+	add {_b} to {_checks::*}
+	assert any of {_checks::*} passes for 500 with "the first holds for 500"
+	assert any of {_checks::*} doesn't pass for 50 with "neither holds for 50"
+
+test "skLambda - none of":
+	set {_a} to lambda (n: number): {_n} > 100
+	set {_b} to lambda (n: number): {_n} < 0
+	add {_a} to {_checks::*}
+	add {_b} to {_checks::*}
+	assert none of {_checks::*} passes for 50 with "neither holds for 50"
+	assert none of {_checks::*} doesn't pass for 500 with "the first holds for 500"
+
+test "skLambda - at least, at most and exactly":
+	set {_a} to lambda (n: number): {_n} > 0
+	set {_b} to lambda (n: number): {_n} > 10
+	set {_c} to lambda (n: number): {_n} > 100
+	add {_a} to {_checks::*}
+	add {_b} to {_checks::*}
+	add {_c} to {_checks::*}
+	assert at least 2 of {_checks::*} passes for 50 with "50 clears the first two"
+	assert at least 2 of {_checks::*} doesn't pass for 5 with "5 clears only the first"
+	assert at most 1 of {_checks::*} passes for 5 with "5 clears only the first"
+	assert at most 1 of {_checks::*} doesn't pass for 50 with "50 clears two"
+	assert exactly 2 of {_checks::*} passes for 50 with "50 clears exactly two"
+	assert exactly 2 of {_checks::*} doesn't pass for 500 with "500 clears all three"

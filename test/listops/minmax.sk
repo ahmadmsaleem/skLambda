@@ -1,0 +1,12 @@
+test "skLambda - highest and lowest by a lambda key":
+	set {_abs} to lambda (n: number) -> number:
+		return abs({_n})
+	set {_signed::*} to -7, 3, and -1
+	assert (highest of {_signed::*} by {_abs}) is -7 with "the largest key wins"
+	assert (lowest of {_signed::*} by {_abs}) is -1 with "the smallest key wins"
+
+test "skLambda - highest of an empty list is unset":
+	set {_abs} to lambda (n: number) -> number:
+		return abs({_n})
+	clear {_empty::*}
+	assert (highest of {_empty::*} by {_abs}) is not set with "nothing to pick from"

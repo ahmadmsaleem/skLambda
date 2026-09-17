@@ -5,10 +5,12 @@ import org.bstats.bukkit.Metrics;
 import ch.njol.skript.util.Timespan;
 import ch.njol.skript.util.Timespan.TimePeriod;
 import ch.njol.skript.util.Version;
+import com.sklambda.elements.types.CommandVisibility;
 import com.sklambda.elements.types.Future;
 import com.sklambda.elements.types.FutureRegistry;
 import com.sklambda.elements.types.ListenerRegistry;
 import com.sklambda.elements.types.OwnerCleanup;
+import com.sklambda.modules.CommandModule;
 import com.sklambda.modules.GuiModule;
 import com.sklambda.modules.LambdaModule;
 import com.sklambda.modules.ListenerModule;
@@ -31,6 +33,7 @@ public class SkLambda extends JavaPlugin {
 
 	private boolean lambdaEnabled;
 	private boolean listenerEnabled;
+	private boolean commandsEnabled;
 	private boolean updateNotifications;
 	private @Nullable BukkitTask notifierTask;
 
@@ -56,6 +59,7 @@ public class SkLambda extends JavaPlugin {
 		saveDefaultConfig();
 		lambdaEnabled = getConfig().getBoolean("lambda", true);
 		listenerEnabled = getConfig().getBoolean("listener", true);
+		commandsEnabled = getConfig().getBoolean("commands", true);
 		updateNotifications = getConfig().getBoolean("update-notifications", true);
 		if (!lambdaEnabled && !listenerEnabled) {
 			getLogger().warning("Both 'lambda' and 'listener' are disabled in config.yml .");
@@ -69,6 +73,7 @@ public class SkLambda extends JavaPlugin {
 		List<AddonModule> modules = new ArrayList<>();
 		if (lambdaEnabled) modules.add(new LambdaModule());
 		if (listenerEnabled) modules.add(new ListenerModule());
+		if (commandsEnabled) modules.add(new CommandModule());
 		// Registers only when skript-gui is present; the module declines to load otherwise.
 		if (lambdaEnabled) modules.add(new GuiModule());
 		addon.loadModules(modules.toArray(new AddonModule[0]));
@@ -83,6 +88,7 @@ public class SkLambda extends JavaPlugin {
 		if (listenerEnabled) {
 			OwnerCleanup.installOwnerCleanup(this);
 		}
+		if (commandsEnabled) CommandVisibility.install(this);
 		startNotifiers();
 
 		if (updateNotifications) new UpdateChecker(this);

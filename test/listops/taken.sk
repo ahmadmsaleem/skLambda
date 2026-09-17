@@ -1,0 +1,9 @@
+test "skLambda - taken while stops at the first failure":
+	set {_small} to lambda (n: number): {_n} < 4
+	set {_nums::*} to 1, 2, 5, 1, and 6
+	assert ({_nums::*} taken while {_small} passes) is 1 and 2 with "expected 1, 2"
+
+test "skLambda - dropped while keeps the rest":
+	set {_small} to lambda (n: number): {_n} < 4
+	set {_nums::*} to 1, 2, 5, 1, and 6
+	assert ({_nums::*} dropped while {_small} passes) is 5, 1, and 6 with "expected 5, 1, 6"

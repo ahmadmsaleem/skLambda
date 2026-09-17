@@ -1,0 +1,6 @@
+function skl_twice(n: number) :: number:
+	return {_n} * 2
+
+test "skLambda - function lambda wraps a script function":
+	set {_f} to function lambda "skl_twice"
+	assert (call lambda {_f} with 6) is 12 with "expected 12"

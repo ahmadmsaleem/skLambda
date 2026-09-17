@@ -1,0 +1,38 @@
+test "skLambda - typed lambda returns a value":
+	set {_double} to lambda (n: number) -> number:
+		return {_n} * 2
+	assert (call lambda {_double} with 5) is 10 with "expected 10"
+
+test "skLambda - invoke is an alias for call":
+	set {_double} to lambda (n: number) -> number:
+		return {_n} * 2
+	assert (invoke lambda {_double} with 7) is 14 with "expected 14"
+
+test "skLambda - calling lambda reads as an expression":
+	set {_double} to lambda (n: number) -> number:
+		return {_n} * 2
+	assert (the result of calling lambda {_double} with 8) is 16 with "expected 16"
+
+test "skLambda - no-arg lambda":
+	set {_const} to lambda -> number:
+		return 42
+	assert (call lambda {_const}) is 42 with "expected 42"
+
+test "skLambda - multi-arg lambda":
+	set {_sum} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	assert (call lambda {_sum} with 3 and 4) is 7 with "expected 7"
+
+test "skLambda - run discards the return value":
+	set {_counter} to 0
+	set {_inc} to lambda:
+		add 1 to {_counter}
+	run lambda {_inc}
+	run lambda {_inc}
+	run lambda {_inc}
+	assert {_counter} is 3 with "expected 3, got %{_counter}%"
+
+test "skLambda - inline body on one line":
+	set {_p} to lambda (n: number): {_n} > 3
+	assert {_p} passes for 5 with "5 is greater than 3"
+	assert {_p} doesn't pass for 2 with "2 is not greater than 3"

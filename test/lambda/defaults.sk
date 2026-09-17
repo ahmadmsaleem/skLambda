@@ -1,0 +1,12 @@
+test "skLambda - default fills a missing trailing argument":
+	set {_f} to lambda (a: number = 2, b: number = 3) -> number:
+		return {_a} + {_b}
+	assert (call lambda {_f} with 2 and 3) is 5 with "both given, expected 5"
+	assert (call lambda {_f} with 10) is 13 with "b defaults to 3, expected 13"
+	assert (call lambda {_f}) is 5 with "both default, expected 5"
+
+test "skLambda - single default argument":
+	set {_inc} to lambda (n: number = 1) -> number:
+		return {_n} + 1
+	assert (call lambda {_inc}) is 2 with "n defaults to 1, expected 2"
+	assert (call lambda {_inc} with 41) is 42 with "n given, expected 42"
