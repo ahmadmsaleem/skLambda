@@ -1,0 +1,16 @@
+test "skLambda - a single predicate passes and fails":
+	set {_p} to lambda (n: number): {_n} > 3
+	assert {_p} passes for 5 with "5 is greater than 3"
+	assert {_p} doesn't pass for 2 with "2 is not greater than 3"
+
+test "skLambda - a predicate list requires all to pass":
+	set {_a} to lambda (n: number): {_n} > 0
+	set {_b} to lambda (n: number): {_n} < 100
+	add {_a} to {_checks::*}
+	add {_b} to {_checks::*}
+	assert {_checks::*} passes for 50 with "both hold for 50"
+	assert {_checks::*} doesn't pass for 200 with "the second fails for 200"
+
+test "skLambda - always and never":
+	assert always() passes for 1 with "always should pass"
+	assert never() doesn't pass for 1 with "never should not pass"

@@ -1,0 +1,11 @@
+test "skLambda - pipe threads a value through a chain":
+	set {_inc} to lambda (n: number) -> number:
+		return {_n} + 1
+	set {_double} to lambda (n: number) -> number:
+		return {_n} * 2
+	assert (pipe 5 through {_inc}, {_double}, and {_inc}) is 13 with "expected 13"
+
+test "skLambda - pipe with a single lambda":
+	set {_double} to lambda (n: number) -> number:
+		return {_n} * 2
+	assert (pipe 20 through {_double}) is 40 with "expected 40"

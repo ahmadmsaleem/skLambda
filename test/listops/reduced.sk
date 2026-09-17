@@ -1,0 +1,17 @@
+test "skLambda - reduced folds a list":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_nums::*} to 3, 5, and 2
+	assert ({_nums::*} reduced with {_add}) is 10 with "expected 10"
+
+test "skLambda - reduced with a seed":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_nums::*} to 3, 5, and 2
+	assert ({_nums::*} reduced with {_add} from 100) is 110 with "expected 110"
+
+test "skLambda - seeded reduce on an empty list returns the seed":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	clear {_empty::*}
+	assert ({_empty::*} reduced with {_add} from 42) is 42 with "expected the seed"

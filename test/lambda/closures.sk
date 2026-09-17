@@ -1,0 +1,22 @@
+test "skLambda - lambda captures surrounding locals":
+	set {_base} to 100
+	set {_addbase} to lambda (n: number) -> number:
+		return {_n} + {_base}
+	delete {_base}
+	assert (call lambda {_addbase} with 5) is 105 with "the captured base should survive"
+
+test "skLambda - parameter shadows a captured local":
+	set {_n} to 999
+	set {_id} to lambda (n: number) -> number:
+		return {_n}
+	assert (call lambda {_id} with 7) is 7 with "the parameter should win"
+
+test "skLambda - each capture is independent":
+	set {_x} to 1
+	set {_first} to lambda -> number:
+		return {_x}
+	set {_x} to 2
+	set {_second} to lambda -> number:
+		return {_x}
+	assert (call lambda {_first}) is 1 with "the first lambda captured 1"
+	assert (call lambda {_second}) is 2 with "the second lambda captured 2"

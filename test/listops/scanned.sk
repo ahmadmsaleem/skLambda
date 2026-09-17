@@ -1,0 +1,11 @@
+test "skLambda - scanned keeps every running result":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_nums::*} to 3, 5, and 2
+	assert ({_nums::*} scanned with {_add}) is 3, 8, and 10 with "expected 3, 8, 10"
+
+test "skLambda - scanned with a seed emits the seed first":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_nums::*} to 3, 5, and 2
+	assert ({_nums::*} scanned with {_add} from 100) is 100, 103, 108, and 110 with "expected 100, 103, 108, 110"

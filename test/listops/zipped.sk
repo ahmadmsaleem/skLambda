@@ -1,0 +1,13 @@
+test "skLambda - zipped pairs two lists":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_left::*} to 1, 2, and 3
+	set {_right::*} to 10, 20, and 30
+	assert ({_left::*} zipped with {_right::*} using {_add}) is 11, 22, and 33 with "expected 11, 22, 33"
+
+test "skLambda - zipped stops at the shorter list":
+	set {_add} to lambda (a: number, b: number) -> number:
+		return {_a} + {_b}
+	set {_left::*} to 1, 2, 3, and 4
+	set {_right::*} to 10 and 20
+	assert ({_left::*} zipped with {_right::*} using {_add}) is 11 and 22 with "expected 11, 22"

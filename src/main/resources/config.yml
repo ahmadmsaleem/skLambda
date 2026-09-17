@@ -5,7 +5,7 @@
 #   RELOAD  - applied immediately by /sklambda reload:
 #             everything under 'notifier', and 'update-notifications'.
 #   RESTART - needs a full server restart, because the syntax is handed to Skript
-#             once at startup and cannot be unregistered: 'lambda' and 'listener'.
+#             once at startup and cannot be unregistered: 'lambda', 'listener' and 'commands'.
 #
 # Each option below is tagged with which one it is.
 
@@ -19,6 +19,10 @@ lambda: true
 # Listeners: the `listen` section, register/unregister/pause/resume,
 # `remaining triggers` / `remaining countdown`, and listener state conditions.
 listener: true
+
+# Command visibility: `show only commands`, `hide commands where`,
+# `hide commands ... from` / `show commands ... to`, and `reset command visibility`.
+commands: true
 
 # [RELOAD] Notify op players on join when a newer skLambda release is available.
 update-notifications: true

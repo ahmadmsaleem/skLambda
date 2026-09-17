@@ -1,0 +1,10 @@
+test "skLambda - negated flips a predicate":
+	set {_pos} to lambda (n: number): {_n} > 0
+	set {_notpos} to negated {_pos}
+	assert {_notpos} passes for -3 with "-3 is not positive"
+	assert {_notpos} doesn't pass for 7 with "7 is positive"
+
+test "skLambda - leading not negates the check":
+	set {_p} to lambda (n: number): {_n} > 3
+	assert not {_p} passes for 2 with "2 is not greater than 3"
+	assert {_p} passes for 5 with "5 is greater than 3"

@@ -1,0 +1,11 @@
+test "skLambda - sorted by orders on the lambda key":
+	set {_key} to lambda (n: number) -> number:
+		return abs({_n})
+	set {_signed::*} to -7, 3, and -1
+	assert ({_signed::*} sorted by {_key}) is -1, 3, and -7 with "expected -1, 3, -7"
+
+test "skLambda - sorted by leaves a single element alone":
+	set {_key} to lambda (n: number) -> number:
+		return {_n}
+	set {_one::*} to 5
+	assert ({_one::*} sorted by {_key}) is 5 with "expected 5"

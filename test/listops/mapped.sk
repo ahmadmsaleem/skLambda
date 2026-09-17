@@ -1,0 +1,11 @@
+test "skLambda - mapped applies a lambda to each element":
+	set {_double} to lambda (n: number) -> number:
+		return {_n} * 2
+	set {_nums::*} to 1, 2, and 3
+	assert ({_nums::*} mapped with {_double}) is 2, 4, and 6 with "expected 2, 4, 6"
+
+test "skLambda - mapped on an empty list is empty":
+	set {_double} to lambda (n: number) -> number:
+		return {_n} * 2
+	clear {_empty::*}
+	assert ({_empty::*} mapped with {_double}) is not set with "mapping nothing gives nothing"
